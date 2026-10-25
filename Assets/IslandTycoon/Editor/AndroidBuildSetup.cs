@@ -35,7 +35,21 @@ namespace IslandTycoon.EditorTools
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
             PlayerSettings.Android.startInFullscreen = true;
             PlayerSettings.Android.renderOutsideSafeArea = true;
+            ApplyLandscape();
             Debug.Log("[IslandTycoon] Android player settings applied");
+        }
+
+        /// <summary>SCRUM-174: landscape only, the sensor flips between landscape-left and landscape-right.</summary>
+        [MenuItem("Island Tycoon/Android/Apply Landscape Orientation")]
+        public static void ApplyLandscape()
+        {
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
+            PlayerSettings.allowedAutorotateToPortrait = false;
+            PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
+            PlayerSettings.allowedAutorotateToLandscapeLeft = true;
+            PlayerSettings.allowedAutorotateToLandscapeRight = true;
+            PlayerSettings.useAnimatedAutorotation = true;
+            Debug.Log("[IslandTycoon] Landscape orientation applied");
         }
 
         [MenuItem("Island Tycoon/Android/Build APK")]
