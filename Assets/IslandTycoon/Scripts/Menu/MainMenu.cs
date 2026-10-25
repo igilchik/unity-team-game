@@ -23,7 +23,7 @@ namespace IslandTycoon
         RectTransform _menu, _logo;
         Vector2 _logoBase;
         Text _toast;
-        float _toastTime;
+        float _toastTime, _exitArmed;
 
         public bool IsOpen => _menu != null && _menu.gameObject.activeSelf;
 
@@ -40,6 +40,18 @@ namespace IslandTycoon
             EnsureEventSystem();
             Build();
             Show();
+            MobilePlatform.BackPressed += OnBack;
+        }
+
+        void OnDestroy() => MobilePlatform.BackPressed -= OnBack;
+
+        /// <summary>Android Back: return to the menu, or press twice in the menu to exit.</summary>
+        void OnBack()
+        {
+            if (!IsOpen) { Show(); return; }
+            if (_exitArmed > 0) { MobilePlatform.Quit(); return; }
+            _exitArmed = 2f;
+            ShowToast("Press back again to exit");
         }
 
         public void Show()
@@ -91,6 +103,7 @@ namespace IslandTycoon
             // buttons and logo live in their own layer so they can be kept inside the screen
             var content = NewRect("Content", _menu, Mid, Vector2.zero, Vector2.zero);
             Stretch(content);
+            content.gameObject.AddComponent<SafeArea>();
 
             var logo = Art.TryGet("UI/logo");
             if (logo != null)
@@ -133,6 +146,8 @@ namespace IslandTycoon
             // gentle logo bob
             if (_logo != null && IsOpen)
                 _logo.anchoredPosition = _logoBase + new Vector2(0, Mathf.Sin(Time.unscaledTime * 2f * Mathf.PI / 2.2f) * 10f);
+
+            if (_exitArmed > 0) _exitArmed -= Time.unscaledDeltaTime;
 
             if (_toastTime > 0)
             {
