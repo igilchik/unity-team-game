@@ -74,7 +74,8 @@ namespace IslandTycoon
                              enabled = true, displayName = "Rooms", icon = "UI/Icons/icon_need_rooms", baseServiceTime = 8.0f },
             new NeedConfig { need = NeedType.Drinks,    buildingName = "Tiki Bar",    spriteKey = "bar",
                              enabled = true, displayName = "Drinks", icon = "UI/Icons/icon_need_drinks", baseServiceTime = 4.8f },
-            new NeedConfig { need = NeedType.Food,      buildingName = "Restaurant",  spriteKey = "food" },
+            new NeedConfig { need = NeedType.Food,      buildingName = "Restaurant",  spriteKey = "food",
+                             enabled = true, displayName = "Food", icon = "UI/Icons/icon_need_food", baseServiceTime = 7.2f },
             new NeedConfig { need = NeedType.Relax,     buildingName = "Pool",        spriteKey = "pool" },
             new NeedConfig { need = NeedType.OceanView, buildingName = "Bungalows",   spriteKey = "bungalows" },
         };
