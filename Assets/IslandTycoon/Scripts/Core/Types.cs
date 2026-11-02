@@ -27,6 +27,7 @@ namespace IslandTycoon
     {
         public int coins;
         public int energy;
+        public int resortValue;
         public List<BuildingState> buildings = new List<BuildingState>();
     }
 }

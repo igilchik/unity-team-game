@@ -6,7 +6,7 @@ namespace IslandTycoon
     /// <summary>
     /// Screen-space HUD over the island.
     /// SCRUM-17: current state of the resort in the title plaque.
-    /// SCRUM-18: Coins. SCRUM-19: Energy.
+    /// SCRUM-18: Coins. SCRUM-19: Energy. SCRUM-20: Resort Value.
     /// </summary>
     public class HudView : MonoBehaviour
     {
@@ -14,12 +14,13 @@ namespace IslandTycoon
 
         GameModel _m;
         RectTransform _root;
-        Text _title, _status, _coins, _energy;
+        Text _title, _status, _coins, _energy, _value;
 
         public Text TitleText => _title;
         public Text StatusText => _status;
         public Text CoinsText => _coins;
         public Text EnergyText => _energy;
+        public Text ValueText => _value;
 
         public void Build(GameModel model)
         {
@@ -44,6 +45,8 @@ namespace IslandTycoon
             _coins.text = _m.S.coins.ToString();
             _energy = Pill("Energy", "UI/Icons/icon_energy", tl, new Vector2(270, -16));
             _energy.text = _m.S.energy.ToString();
+            _value = Pill("ResortValue", "UI/Icons/icon_resort_value", tl, new Vector2(520, -16));
+            _value.text = _m.S.resortValue.ToString();
         }
 
         /// <summary>Wooden pill with an icon on the left and a number inside.</summary>
