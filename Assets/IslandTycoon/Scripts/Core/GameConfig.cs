@@ -52,6 +52,9 @@ namespace IslandTycoon
     [CreateAssetMenu(menuName = "Island Tycoon/Game Config", fileName = "GameConfig")]
     public class GameConfig : ScriptableObject
     {
+        [Header("Start")]
+        public int startCoins = 60;
+
         [Header("Needs / buildings")]
         public NeedConfig[] needs =
         {
