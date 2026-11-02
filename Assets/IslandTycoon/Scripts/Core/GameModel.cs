@@ -24,7 +24,7 @@ namespace IslandTycoon
 
         GameState NewState()
         {
-            var s = new GameState { coins = Cfg.startCoins, energy = Cfg.startEnergy };
+            var s = new GameState { coins = Cfg.startCoins, energy = Cfg.startEnergy, stats = NewStats() };
             foreach (var n in Needs.All)
             {
                 var plot = Cfg.Plot((int)n);
@@ -56,6 +56,9 @@ namespace IslandTycoon
 
         /// <summary>Guests can ask for the need now: the need type is implemented and its building is open.</summary>
         public bool IsNeedActive(int need) => Cfg.Need(need).enabled && B(need).exists && B(need).unlocked;
+
+        /// <summary>Aggregated numbers of one need in the current wave.</summary>
+        public NeedStats Stats(int need) => S.stats[need];
 
         public int OpenBuildings
         {

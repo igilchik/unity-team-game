@@ -40,7 +40,9 @@ namespace IslandTycoon
     [Serializable]
     public class NeedStats
     {
-        public int requested;
+        public int requested;   // requests for this need in the wave
+        public int served;      // requests already served
+        public int Remaining => requested - served;
     }
 
     /// <summary>Whole state of the resort.</summary>
