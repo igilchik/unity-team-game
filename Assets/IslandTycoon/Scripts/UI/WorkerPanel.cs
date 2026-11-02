@@ -7,6 +7,7 @@ namespace IslandTycoon
     /// <summary>
     /// SCRUM-75: Worker Allocation UI. Tap a building: a panel at the bottom shows its
     /// workers with - / + buttons to take a worker out or send a free one in.
+    /// SCRUM-76: moving is allowed before the wave starts.
     /// </summary>
     public class WorkerPanel : MonoBehaviour
     {
@@ -90,9 +91,11 @@ namespace IslandTycoon
                 UIFactory.SetText(_title, nc.buildingName);
                 UIFactory.SetText(_info, $"Serves {nc.displayName}   ·   Queue {_m.QueueCount(n)}");
                 UIFactory.SetText(_workers, $"<size=22>Workers</size>\n{b.workers}");
-                UIFactory.SetText(_free, $"Free workers: {_m.FreeWorkers}");
-                _minus.interactable = b.workers > 0;
-                _plus.interactable = _m.FreeWorkers > 0;
+                UIFactory.SetText(_free, _m.CanMoveWorkers
+                    ? $"Free workers: {_m.FreeWorkers}"
+                    : "<color=#8A7F70>Move workers before the wave</color>");
+                _minus.interactable = _m.CanMoveWorkers && b.workers > 0;
+                _plus.interactable = _m.CanMoveWorkers && _m.FreeWorkers > 0;
             }
             else
             {
