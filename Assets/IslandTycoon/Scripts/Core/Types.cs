@@ -25,6 +25,7 @@ namespace IslandTycoon
         public int need;
         public bool exists;      // the island has a plot for this need
         public bool unlocked;    // the building is open (locked areas open later)
+        public int workers;      // workers assigned to this building
     }
 
     /// <summary>Where a guest is on the way through the resort.</summary>
@@ -70,6 +71,8 @@ namespace IslandTycoon
         public int coins;
         public int energy;
         public int resortValue;
+
+        public int totalWorkers;     // all workers of the resort (assigned + free)
 
         public GamePhase phase = GamePhase.AwaitingWave;
         public int waveIndex;        // 0-based index of the next / current wave
