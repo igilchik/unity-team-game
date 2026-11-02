@@ -15,6 +15,8 @@ namespace IslandTycoon
         /// <summary>Raised after every change of the game state; the UI refreshes from it.</summary>
         public event Action Changed;
         public event Action WaveStarted;
+        /// <summary>Workers of a building changed (need).</summary>
+        public event Action<int> WorkersMoved;
 
         public GameModel(GameConfig cfg)
         {
@@ -122,6 +124,31 @@ namespace IslandTycoon
             get { int n = 0; foreach (var b in S.buildings) if (b.exists && b.unlocked) n++; return n; }
         }
     
+
+        // ------------------------------------------------------------------ workers
+
+        /// <summary>Puts a free worker into an open building.</summary>
+        public bool AssignWorker(int need) => MoveWorker(need, +1);
+
+        /// <summary>Takes a worker out of a building; he becomes free.</summary>
+        public bool UnassignWorker(int need) => MoveWorker(need, -1);
+
+        /// <summary>
+        /// delta &gt; 0: a free worker goes to the building, delta &lt; 0: a worker leaves it.
+        /// One worker per call; locked buildings take no workers.
+        /// </summary>
+        public bool MoveWorker(int need, int delta)
+        {
+            if (need < 0 || need >= S.buildings.Count || delta == 0) return false;
+            var b = B(need);
+            if (!b.exists || !b.unlocked) return false;
+            if (delta > 0 && FreeWorkers <= 0) return false;
+            if (delta < 0 && b.workers <= 0) return false;
+            b.workers += delta > 0 ? 1 : -1;
+            WorkersMoved?.Invoke(need);
+            Changed?.Invoke();
+            return true;
+        }
 
         // ------------------------------------------------------------------ guest needs
 
