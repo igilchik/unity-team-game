@@ -66,6 +66,25 @@ namespace IslandTycoon
             return sr;
         }
 
+        /// <summary>Building art; locked plots show a fence or jungle.</summary>
+        public static Sprite Building(GameConfig cfg, int need, bool unlocked, bool jungleLock)
+        {
+            if (!unlocked) return Get(jungleLock ? "Buildings/plot_locked_jungle" : "Buildings/plot_locked_fence");
+            string key = cfg.Need(need).spriteKey;
+            if (string.IsNullOrEmpty(key)) key = ((NeedType)need).ToString().ToLower();
+            return Get($"Buildings/{key}_lv1");
+        }
+
+        /// <summary>Scales a sprite to a world width and puts its bottom edge at local y = 0, independent of the pivot.</summary>
+        public static void FitBottom(SpriteRenderer sr, float worldWidth, float yOffset = 0)
+        {
+            if (sr.sprite == null) return;
+            var b = sr.sprite.bounds;
+            float k = worldWidth / Mathf.Max(0.01f, b.size.x);
+            sr.transform.localScale = new Vector3(k, k, 1);
+            sr.transform.localPosition = new Vector3(-b.center.x * k, (-b.min.y) * k + yOffset, 0);
+        }
+
         /// <summary>Scales a sprite to a world height, centred on the parent.</summary>
         public static void FitCenter(SpriteRenderer sr, float worldHeight)
         {
