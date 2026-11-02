@@ -29,6 +29,8 @@ namespace IslandTycoon
         public Text EnergyText => _energy;
         public Text ValueText => _value;
         public Button StartWaveButton => _startWave;
+        /// <summary>Safe-area root for other HUD panels.</summary>
+        public RectTransform Root => _root;
 
         public void Build(GameModel model, Action onStartWave = null)
         {
