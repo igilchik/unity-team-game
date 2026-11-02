@@ -27,6 +27,24 @@ namespace IslandTycoon
         public bool unlocked;    // the building is open (locked areas open later)
     }
 
+    /// <summary>Where a guest is on the way through the resort.</summary>
+    public enum GuestStage { Walking = 0, Queued = 1, InService = 2, Leaving = 3, Done = 4 }
+
+    /// <summary>A guest in the resort during an active wave.</summary>
+    [Serializable]
+    public class Guest
+    {
+        public int id;
+        public int skin;
+        public List<int> needs = new List<int>();
+        public int index;          // which need of the list is current
+        public GuestStage stage;
+        public float timer;        // walking / leaving countdown
+        public float waited;       // time spent in the queue for the current need
+        public float progress;     // service progress 0..1
+        public int CurrentNeed => index < needs.Count ? needs[index] : -1;
+    }
+
     /// <summary>One guest of a wave, generated before the wave starts.</summary>
     [Serializable]
     public class GuestPlan
@@ -59,6 +77,9 @@ namespace IslandTycoon
         // active wave
         public float waveTime;       // seconds since the wave started
         public List<GuestPlan> plans = new List<GuestPlan>();
+        public int nextPlan;         // next guest to arrive
+        public List<Guest> guests = new List<Guest>();
+        public int nextGuestId;
         public List<NeedStats> stats = new List<NeedStats>();
         public List<BuildingState> buildings = new List<BuildingState>();
     }
