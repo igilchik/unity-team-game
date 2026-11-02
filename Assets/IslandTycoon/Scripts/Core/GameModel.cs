@@ -127,8 +127,11 @@ namespace IslandTycoon
 
         // ------------------------------------------------------------------ workers
 
-        /// <summary>Workers can be moved while the player prepares the resort (AWAITING_WAVE).</summary>
-        public bool CanMoveWorkers => S.phase == GamePhase.AwaitingWave;
+        /// <summary>
+        /// Workers can be moved while the player prepares the resort (AWAITING_WAVE)
+        /// and also during an active wave, to react to bottlenecks. Moves are instant and free.
+        /// </summary>
+        public bool CanMoveWorkers => S.phase == GamePhase.AwaitingWave || S.phase == GamePhase.WaveActive;
 
         /// <summary>Puts a free worker into an open building.</summary>
         public bool AssignWorker(int need) => MoveWorker(need, +1);
@@ -153,6 +156,27 @@ namespace IslandTycoon
             Changed?.Invoke();
             return true;
         }
+
+        /// <summary>
+        /// + in the middle of a wave: a free worker if there is one, otherwise the worker
+        /// is taken from the building with the most workers.
+        /// </summary>
+        public bool PullWorker(int need)
+        {
+            if (!CanMoveWorkers || need < 0 || need >= S.buildings.Count || !B(need).unlocked) return false;
+            if (FreeWorkers > 0) return MoveWorker(need, +1);
+            int donor = -1, most = 0;
+            foreach (var b in S.buildings)
+                if (b.need != need && b.workers > most) { most = b.workers; donor = b.need; }
+            if (donor < 0) return false;
+            B(donor).workers--;
+            WorkersMoved?.Invoke(donor);
+            return MoveWorker(need, +1);
+        }
+
+        /// <summary>Some worker could come to the building now (free or from another building).</summary>
+        public bool CanPullWorker(int need) =>
+            CanMoveWorkers && B(need).unlocked && (FreeWorkers > 0 || AssignedWorkers - B(need).workers > 0);
 
         // ------------------------------------------------------------------ guest needs
 
