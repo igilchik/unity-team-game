@@ -9,6 +9,7 @@ namespace IslandTycoon
         const string Root = "IslandTycoon/Sprites/";
         static readonly Dictionary<string, Sprite> Cache = new Dictionary<string, Sprite>();
         static Font _font;
+        static Material _spriteMat;
 
         /// <summary>Returns null without a warning when the sprite does not exist (optional art).</summary>
         public static Sprite TryGet(string path)
@@ -38,6 +39,41 @@ namespace IslandTycoon
         {
             foreach (var p in paths) { var s = TryGet(p); if (s != null) return s; }
             return null;
+        }
+
+        /// <summary>Unlit sprite material: works in URP 2D (no lights needed) and Built-in.</summary>
+        public static Material SpriteMaterial
+        {
+            get
+            {
+                if (_spriteMat != null) return _spriteMat;
+                var sh = Shader.Find("Universal Render Pipeline/2D/Sprite-Unlit-Default");
+                if (sh == null) sh = Shader.Find("Sprites/Default");
+                if (sh != null) _spriteMat = new Material(sh);
+                return _spriteMat;
+            }
+        }
+
+        /// <summary>World sprite (not UI) with the shared unlit material.</summary>
+        public static SpriteRenderer MakeSprite(string name, Transform parent, string path, int order)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = string.IsNullOrEmpty(path) ? null : Get(path);
+            if (SpriteMaterial != null) sr.sharedMaterial = SpriteMaterial;
+            sr.sortingOrder = order;
+            return sr;
+        }
+
+        /// <summary>Scales a sprite to a world height, centred on the parent.</summary>
+        public static void FitCenter(SpriteRenderer sr, float worldHeight)
+        {
+            if (sr.sprite == null) return;
+            var b = sr.sprite.bounds;
+            float k = worldHeight / Mathf.Max(0.01f, b.size.y);
+            sr.transform.localScale = new Vector3(k, k, 1);
+            sr.transform.localPosition = new Vector3(-b.center.x * k, -b.center.y * k, 0);
         }
 
         /// <summary>Game font (Fredoka One) with built-in fallbacks.</summary>
