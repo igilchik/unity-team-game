@@ -26,6 +26,7 @@ namespace IslandTycoon
             Section("SCRUM-23 AWAITING_WAVE", () => AwaitingWave(cfg));
             Section("SCRUM-27 Start wave", () => StartWave(cfg));
             Section("SCRUM-40 Guest needs generation", () => NeedsGeneration(cfg));
+            Section("SCRUM-47 Wave Needs Panel during a wave", () => NeedsPanelDuringWave(cfg));
 
             _sb.Insert(0, _fails == 0 ? "ALL CHECKS PASSED\n" : $"{_fails} CHECK(S) FAILED\n");
             return _sb.ToString();
@@ -195,6 +196,81 @@ namespace IslandTycoon
         {
             foreach (var p in plans) if (p.needs.Contains((int)need)) return true;
             return false;
+        }
+    
+
+        // ------------------------------------------------------------------ SCRUM-47
+
+        static NeedsPanel MakePanel(GameModel m, GameObject go)
+        {
+            var canvas = UIFactory.Canvas("SelfTestCanvas");
+            canvas.transform.SetParent(go.transform, false);
+            var panel = go.AddComponent<NeedsPanel>();
+            panel.Build(m, canvas.transform);
+            return panel;
+        }
+
+        static void NeedsPanelDuringWave(GameConfig cfg)
+        {
+            var m = new GameModel(cfg);
+            var go = new GameObject("SelfTest_Needs");
+            try
+            {
+                var panel = MakePanel(m, go);
+                int rooms = (int)NeedType.Rooms;
+                Check(panel.Header.text == "GUEST NEEDS", "panel header before the wave");
+                Check(panel.RowVisible(rooms) && panel.RowVisible((int)NeedType.Drinks) && panel.RowVisible((int)NeedType.Food),
+                    "rows for Rooms, Drinks and Food");
+                Check(!panel.RowVisible((int)NeedType.Relax) && !panel.RowVisible((int)NeedType.OceanView), "no rows for locked needs");
+                Check(panel.RowValue(rooms).Contains("no guests"), "no values before the wave");
+
+                m.StartWave();
+                Check(panel.Header.text == "WAVE 1 NEEDS", "panel header during the wave");
+                int busiest = rooms;
+                for (int n = 0; n < Needs.Count; n++) if (m.Stats(n).requested > m.Stats(busiest).requested) busiest = n;
+                var st = m.Stats(busiest);
+                Check(panel.RowValue(busiest).Contains($"0/{st.requested}"), "requests shown when the wave starts");
+
+                int guard = 0;
+                while (st.served == 0 && guard++ < 10000) m.Tick(0.1f);
+                Check(st.served > 0 && panel.RowValue(busiest).Contains($"{st.served}/{st.requested}"), "served count follows the wave");
+
+                guard = 0;
+                bool queueShown = true;
+                while (!m.AllGuestsDone && guard++ < 100000)
+                {
+                    m.Tick(0.1f);
+                    for (int n = 0; n < Needs.Count; n++)
+                        if (m.IsNeedActive(n)) queueShown &= panel.RowValue(n).Contains($"{m.QueueCount(n)} wait");
+                }
+                Check(m.AllGuestsDone, "every guest of the wave is served");
+                Check(queueShown, "waiting guests are always shown");
+                bool allServed = true;
+                for (int n = 0; n < Needs.Count; n++)
+                    if (m.IsNeedActive(n)) allServed &= m.Stats(n).served == m.Stats(n).requested
+                                                     && panel.RowValue(n).Contains($"{m.Stats(n).requested}/{m.Stats(n).requested}");
+                Check(allServed, "panel ends with every request served");
+            }
+            finally { Dispose(go); }
+
+            // bottleneck: many guests for one building at once
+            var rush = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            var go2 = new GameObject("SelfTest_Bottleneck");
+            try
+            {
+                rush.waves = new[] { new WaveConfig { guests = 8, spacing = 0.1f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+                var mb = new GameModel(rush);
+                var panel = MakePanel(mb, go2);
+                int rooms = (int)NeedType.Rooms;
+                Check(!mb.IsBottleneck(rooms), "no bottleneck before the wave");
+                mb.StartWave();
+                for (int i = 0; i < 30; i++) mb.Tick(0.1f);
+                Check(mb.QueueCount(rooms) >= rush.bottleneckQueue, "queue builds up at the Hotel");
+                Check(mb.IsBottleneck(rooms), "long queue = bottleneck");
+                Check(panel.RowWarning(rooms), "panel marks the bottleneck");
+                Check(!mb.IsBottleneck((int)NeedType.Drinks) && !panel.RowWarning((int)NeedType.Drinks), "other needs are fine");
+            }
+            finally { Dispose(go2); Dispose(rush); }
         }
     }
 }
