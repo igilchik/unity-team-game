@@ -61,9 +61,13 @@ namespace IslandTycoon
 
         // ------------------------------------------------------------------ wave
 
-        /// <summary>Moves the resort from AWAITING_WAVE into an active wave.</summary>
+        /// <summary>A wave can be started only while the resort is in AWAITING_WAVE.</summary>
+        public bool CanStartWave => S.phase == GamePhase.AwaitingWave;
+
+        /// <summary>Moves the resort from AWAITING_WAVE into an active wave. Refused in any other state.</summary>
         public bool StartWave()
         {
+            if (!CanStartWave) return false;
             S.waveTime = 0;
             S.phase = GamePhase.WaveActive;
             WaveStarted?.Invoke();
