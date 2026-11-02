@@ -23,6 +23,7 @@ namespace IslandTycoon
             var cfg = GameConfig.Load();
 
             Section("SCRUM-22 Home view data", () => HomeData(cfg));
+            Section("SCRUM-23 AWAITING_WAVE", () => AwaitingWave(cfg));
 
             _sb.Insert(0, _fails == 0 ? "ALL CHECKS PASSED\n" : $"{_fails} CHECK(S) FAILED\n");
             return _sb.ToString();
@@ -70,7 +71,7 @@ namespace IslandTycoon
                 Check(hud.CoinsText.text == cfg.startCoins.ToString(), "HUD shows start Coins");
                 Check(hud.EnergyText.text == cfg.startEnergy.ToString(), "HUD shows start Energy");
                 Check(hud.ValueText.text == "0", "HUD shows Resort Value 0");
-                Check(hud.TitleText.text == cfg.island.name.ToUpperInvariant(), "HUD shows the island name");
+                Check(hud.StatusText.text.Contains(cfg.island.name), "HUD shows the island name");
                 Check(hud.StatusText.text.Contains("3 of 5"), "HUD shows open buildings");
 
                 m.S.coins += 25;
@@ -82,6 +83,15 @@ namespace IslandTycoon
                 Check(hud.ValueText.text == "40", "HUD follows Resort Value changes");
             }
             finally { Dispose(go); }
+        }
+
+        // ------------------------------------------------------------------ SCRUM-23
+
+        static void AwaitingWave(GameConfig cfg)
+        {
+            var m = new GameModel(cfg);
+            Check(m.Phase == GamePhase.AwaitingWave && m.AwaitingWave, "new game starts in AWAITING_WAVE");
+            Check(m.WaveNumber == 1, "first wave is wave 1");
         }
     }
 }

@@ -8,6 +8,7 @@ namespace IslandTycoon
     /// SCRUM-17: current state of the resort in the title plaque.
     /// SCRUM-18: Coins. SCRUM-19: Energy. SCRUM-20: Resort Value.
     /// SCRUM-21: every value is read from the current game data and refreshed on GameModel.Changed.
+    /// SCRUM-23: the plaque shows the wave number and the AWAITING_WAVE state.
     /// </summary>
     public class HudView : MonoBehaviour
     {
@@ -56,7 +57,7 @@ namespace IslandTycoon
         public void Refresh()
         {
             var s = _m.S;
-            UIFactory.SetText(_title, _m.IC.name.ToUpperInvariant());
+            UIFactory.SetText(_title, "WAVE " + _m.WaveNumber);
             UIFactory.SetText(_status, ResortStatus());
             UIFactory.SetText(_coins, s.coins.ToString());
             UIFactory.SetText(_energy, s.energy.ToString());
@@ -72,7 +73,15 @@ namespace IslandTycoon
         }
 
         /// <summary>One line describing the resort right now.</summary>
-        string ResortStatus() => $"{_m.OpenBuildings} of {CountPlots()} buildings open";
+        string ResortStatus()
+        {
+            string buildings = $"{_m.OpenBuildings} of {CountPlots()} buildings open";
+            switch (_m.Phase)
+            {
+                case GamePhase.AwaitingWave: return $"{_m.IC.name} · {buildings} · get ready!";
+                default: return $"{_m.IC.name} · {buildings}";
+            }
+        }
 
         int CountPlots()
         {
