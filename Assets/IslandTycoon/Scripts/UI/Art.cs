@@ -66,6 +66,13 @@ namespace IslandTycoon
             return sr;
         }
 
+        /// <summary>Icon of a guest need.</summary>
+        public static string NeedIcon(GameConfig cfg, int need)
+        {
+            var icon = cfg.Need(need).icon;
+            return string.IsNullOrEmpty(icon) ? "UI/Icons/icon_help" : icon;
+        }
+
         /// <summary>Building art; locked plots show a fence or jungle.</summary>
         public static Sprite Building(GameConfig cfg, int need, bool unlocked, bool jungleLock)
         {

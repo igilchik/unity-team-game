@@ -53,6 +53,9 @@ namespace IslandTycoon
         public bool Exists(int need) => B(need).exists;
         public PlotConfig Plot(int need) => Cfg.Plot(need);
 
+        /// <summary>Guests can ask for the need now: the need type is implemented and its building is open.</summary>
+        public bool IsNeedActive(int need) => Cfg.Need(need).enabled && B(need).exists && B(need).unlocked;
+
         public int OpenBuildings
         {
             get { int n = 0; foreach (var b in S.buildings) if (b.exists && b.unlocked) n++; return n; }
