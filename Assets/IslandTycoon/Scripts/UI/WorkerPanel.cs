@@ -9,6 +9,7 @@ namespace IslandTycoon
     /// workers with - / + buttons to take a worker out or send a free one in.
     /// SCRUM-76: moving is allowed before the wave starts.
     /// SCRUM-77: ... and during the wave; + takes a worker from the busiest building if none is free.
+    /// SCRUM-78: the panel refreshes after every change of the game (moves, queue during the wave).
     /// </summary>
     public class WorkerPanel : MonoBehaviour
     {
@@ -55,6 +56,12 @@ namespace IslandTycoon
 
             UIFactory.IconButton("Close", _panel, "UI/Icons/icon_close", "X", new Vector2(1, 1), new Vector2(-6, -6), new Vector2(84, 84), () => _close?.Invoke(), true);
             _panel.gameObject.SetActive(false);
+            _m.Changed += Refresh;
+        }
+
+        void OnDestroy()
+        {
+            if (_m != null) _m.Changed -= Refresh;
         }
 
         void Press(int delta)

@@ -9,10 +9,12 @@ namespace IslandTycoon
     {
         public static float BgW = 16.72f, BgH = 9.41f;
         static Vector2 _px = new Vector2(1672, 941);
+        static IslandConfig _ic;
         static readonly Dictionary<int, PlotConfig> Plots = new Dictionary<int, PlotConfig>();
 
         public static void Configure(IslandConfig ic, Vector2 bgPixels)
         {
+            _ic = ic;
             _px = bgPixels;
             BgW = bgPixels.x / 100f;
             BgH = bgPixels.y / 100f;
@@ -34,6 +36,17 @@ namespace IslandTycoon
         }
 
         public static float PlotWidth(int need) => Plots[need].width / 100f;
+
+        /// <summary>Workers of a building stand in a row next to it.</summary>
+        public static Vector2 WorkerSpot(int need, int i)
+        {
+            float w = PlotWidth(need);
+            return PlotBase(need) + new Vector2(-w * 0.36f - i * 0.38f, 0.22f - i * 0.04f);
+        }
+
+        /// <summary>Free workers wait in a small group near the pier.</summary>
+        public static Vector2 FreeWorkerSpot(int i) =>
+            Px(_ic.freeWorkersPixel.x + (i % 4) * 45, _ic.freeWorkersPixel.y + (i / 4) * 30 + (i % 2) * 10);
 
         /// <summary>Lower on screen = drawn in front.</summary>
         public static int Order(float y, int bias = 0) => 5000 - Mathf.RoundToInt(y * 100f) + bias;
@@ -62,6 +75,7 @@ namespace IslandTycoon
 
         public int Need;
         public SpriteRenderer Body, Warning;
+        public readonly List<Transform> Workers = new List<Transform>();
         public float Top = 2f;
     }
 
@@ -70,6 +84,7 @@ namespace IslandTycoon
     /// SCRUM-16: shows every building plot, open buildings and locked areas.
     /// SCRUM-46: a pulsing warning sign above a building with a bottleneck.
     /// SCRUM-75: the selected building gently pulses.
+    /// SCRUM-78: workers stand next to their building, free workers by the pier; every move shows at once.
     /// </summary>
     public class WorldView : MonoBehaviour
     {
@@ -77,6 +92,8 @@ namespace IslandTycoon
         GameModel M => _c.Model;
         Transform _content;
         readonly Dictionary<int, PlotView> _plots = new Dictionary<int, PlotView>();
+        readonly List<Transform> _freeWorkers = new List<Transform>();
+        const float WorkerHeight = 1.25f;
 
         public void Build(GameController c)
         {
@@ -89,6 +106,7 @@ namespace IslandTycoon
         {
             if (_content != null) Destroy(_content.gameObject);
             _plots.Clear();
+            _freeWorkers.Clear();
             _content = new GameObject("Island").transform;
             _content.SetParent(transform, false);
 
@@ -159,6 +177,7 @@ namespace IslandTycoon
             if (_c == null || M == null) return;
             float t = Time.time;
             foreach (var pv in _plots.Values) SyncPlot(pv, t);
+            SyncFreeWorkers(t);
         }
 
         void SyncPlot(PlotView pv, float t)
@@ -174,6 +193,59 @@ namespace IslandTycoon
                 pv.Warning.transform.localScale = new Vector3(k, k, 1);
                 pv.Warning.transform.localPosition = new Vector3(0, pv.Top + 0.3f, 0);
             }
+
+            // assigned workers stand in front of their building
+            var b = M.B(pv.Need);
+            int want = b.unlocked ? b.workers : 0;
+            while (pv.Workers.Count < want)
+            {
+                var holder = new GameObject("Worker").transform;
+                holder.SetParent(_content, false);
+                holder.localPosition = Layout.WorkerSpot(pv.Need, pv.Workers.Count);
+                var w = Art.MakeSprite("Body", holder, "Characters/Worker/worker_front", 0);
+                Art.FitFeet(w, WorkerHeight);
+                pv.Workers.Add(holder);
+                _c.Fx("FX/fx_puff", holder.position + Vector3.up * 0.4f, 0.7f, 0.1f);
+            }
+            while (pv.Workers.Count > want)
+            {
+                var h = pv.Workers[pv.Workers.Count - 1];
+                pv.Workers.RemoveAt(pv.Workers.Count - 1);
+                _c.Fx("FX/fx_puff", h.position + Vector3.up * 0.4f, 0.7f, 0.1f);
+                Destroy(h.gameObject);
+            }
+            int baseOrder = Layout.Order(Layout.PlotBase(pv.Need).y);
+            bool busy = M.InServiceCount(pv.Need) > 0;
+            for (int i = 0; i < pv.Workers.Count; i++)
+            {
+                var h = pv.Workers[i];
+                h.localPosition = Layout.WorkerSpot(pv.Need, i) + new Vector2(0, busy ? Mathf.Abs(Mathf.Sin(t * 9f + i)) * 0.05f : 0);
+                h.GetComponentInChildren<SpriteRenderer>().sortingOrder = baseOrder + 5 + i;
+            }
+        }
+
+        void SyncFreeWorkers(float t)
+        {
+            int want = Mathf.Max(0, M.FreeWorkers);
+            while (_freeWorkers.Count < want)
+            {
+                var holder = new GameObject("FreeWorker").transform;
+                holder.SetParent(_content, false);
+                var spot = Layout.FreeWorkerSpot(_freeWorkers.Count);
+                holder.localPosition = spot;
+                var w = Art.MakeSprite("Body", holder, "Characters/Worker/worker_wave", Layout.Order(spot.y, 1));
+                Art.FitFeet(w, WorkerHeight);
+                _freeWorkers.Add(holder);
+                _c.Fx("FX/fx_puff", holder.position + Vector3.up * 0.4f, 0.7f, 0.1f);
+            }
+            while (_freeWorkers.Count > want)
+            {
+                var h = _freeWorkers[_freeWorkers.Count - 1];
+                _freeWorkers.RemoveAt(_freeWorkers.Count - 1);
+                Destroy(h.gameObject);
+            }
+            for (int i = 0; i < _freeWorkers.Count; i++)
+                _freeWorkers[i].localRotation = Quaternion.Euler(0, 0, Mathf.Sin(t * 2f + i) * 3f);
         }
 
         void AddSea(Sprite sprite, bool mirror, Vector2 center, float scale)
