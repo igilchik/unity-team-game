@@ -24,6 +24,7 @@ namespace IslandTycoon
 
             Section("SCRUM-22 Home view data", () => HomeData(cfg));
             Section("SCRUM-23 AWAITING_WAVE", () => AwaitingWave(cfg));
+            Section("SCRUM-27 Start wave", () => StartWave(cfg));
 
             _sb.Insert(0, _fails == 0 ? "ALL CHECKS PASSED\n" : $"{_fails} CHECK(S) FAILED\n");
             return _sb.ToString();
@@ -93,6 +94,42 @@ namespace IslandTycoon
             Check(m.Phase == GamePhase.AwaitingWave && m.AwaitingWave, "new game starts in AWAITING_WAVE");
             Check(m.WaveNumber == 1, "first wave is wave 1");
             Check(m.CanStartWave, "Start Wave allowed in AWAITING_WAVE");
+        }
+
+        // ------------------------------------------------------------------ SCRUM-27
+
+        static void StartWave(GameConfig cfg)
+        {
+            var m = new GameModel(cfg);
+            int started = 0;
+            m.WaveStarted += () => started++;
+            Check(m.StartWave(), "StartWave from AWAITING_WAVE");
+            Check(m.Phase == GamePhase.WaveActive, "AWAITING_WAVE -> WAVE_ACTIVE");
+            Check(started == 1, "WaveStarted raised once");
+            Check(!m.CanStartWave && !m.StartWave(), "StartWave refused during WAVE_ACTIVE");
+            Check(started == 1 && m.Phase == GamePhase.WaveActive, "second start changes nothing");
+            m.Tick(0.1f);
+            m.Tick(0.1f);
+            Check(Mathf.Abs(m.S.waveTime - 0.2f) < 0.001f, "wave time runs during the wave");
+            var idle = new GameModel(cfg);
+            idle.Tick(1f);
+            Check(idle.S.waveTime == 0 && idle.Phase == GamePhase.AwaitingWave, "nothing runs before the wave");
+
+            // the button follows the state
+            var m2 = new GameModel(cfg);
+            int pressed = 0;
+            var go = new GameObject("SelfTest_StartWave");
+            try
+            {
+                var hud = go.AddComponent<HudView>();
+                hud.Build(m2, () => { pressed++; m2.StartWave(); });
+                Check(hud.StartWaveButton.gameObject.activeSelf, "START WAVE visible in AWAITING_WAVE");
+                hud.StartWaveButton.onClick.Invoke();
+                Check(pressed == 1 && m2.Phase == GamePhase.WaveActive, "START WAVE starts the wave");
+                Check(!hud.StartWaveButton.gameObject.activeSelf, "START WAVE hidden during the wave");
+                Check(hud.StatusText.text.Contains("in progress"), "HUD shows the running wave");
+            }
+            finally { Dispose(go); }
         }
     }
 }
