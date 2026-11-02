@@ -13,8 +13,11 @@ namespace IslandTycoon
             { NeedType.Rooms, NeedType.Drinks, NeedType.Food, NeedType.Relax, NeedType.OceanView };
     }
 
-    /// <summary>Resort state machine. AWAITING_WAVE: the player prepares the resort before the next wave.</summary>
-    public enum GamePhase { AwaitingWave = 0 }
+    /// <summary>
+    /// Resort state machine. AWAITING_WAVE: the player prepares the resort before the next wave.
+    /// WAVE_ACTIVE: guests are coming and the resort serves them.
+    /// </summary>
+    public enum GamePhase { AwaitingWave = 0, WaveActive = 1 }
 
     [Serializable]
     public class BuildingState
@@ -34,6 +37,9 @@ namespace IslandTycoon
 
         public GamePhase phase = GamePhase.AwaitingWave;
         public int waveIndex;        // 0-based index of the next / current wave
+
+        // active wave
+        public float waveTime;       // seconds since the wave started
         public List<BuildingState> buildings = new List<BuildingState>();
     }
 }

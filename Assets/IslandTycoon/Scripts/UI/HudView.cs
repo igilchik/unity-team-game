@@ -9,6 +9,7 @@ namespace IslandTycoon
     /// SCRUM-18: Coins. SCRUM-19: Energy. SCRUM-20: Resort Value.
     /// SCRUM-21: every value is read from the current game data and refreshed on GameModel.Changed.
     /// SCRUM-23: the plaque shows the wave number and the AWAITING_WAVE state.
+    /// SCRUM-26: ... and the running wave.
     /// </summary>
     public class HudView : MonoBehaviour
     {
@@ -79,6 +80,9 @@ namespace IslandTycoon
             switch (_m.Phase)
             {
                 case GamePhase.AwaitingWave: return $"{_m.IC.name} · {buildings} · get ready!";
+                case GamePhase.WaveActive:
+                    int t = (int)_m.S.waveTime;
+                    return $"{_m.IC.name} · wave in progress {t / 60}:{t % 60:00}";
                 default: return $"{_m.IC.name} · {buildings}";
             }
         }

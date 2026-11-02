@@ -13,6 +13,7 @@ namespace IslandTycoon
 
         /// <summary>Raised after every change of the game state; the UI refreshes from it.</summary>
         public event Action Changed;
+        public event Action WaveStarted;
 
         public GameModel(GameConfig cfg)
         {
@@ -44,6 +45,7 @@ namespace IslandTycoon
         public IslandConfig IC => Cfg.island;
         public GamePhase Phase => S.phase;
         public bool AwaitingWave => S.phase == GamePhase.AwaitingWave;
+        public bool WaveActive => S.phase == GamePhase.WaveActive;
         /// <summary>1-based number of the next / current wave.</summary>
         public int WaveNumber => S.waveIndex + 1;
         public BuildingState B(int need) => S.buildings[need];
@@ -54,6 +56,27 @@ namespace IslandTycoon
         public int OpenBuildings
         {
             get { int n = 0; foreach (var b in S.buildings) if (b.exists && b.unlocked) n++; return n; }
+        }
+    
+
+        // ------------------------------------------------------------------ wave
+
+        /// <summary>Moves the resort from AWAITING_WAVE into an active wave.</summary>
+        public bool StartWave()
+        {
+            S.waveTime = 0;
+            S.phase = GamePhase.WaveActive;
+            WaveStarted?.Invoke();
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>Advances the active wave by dt seconds.</summary>
+        public void Tick(float dt)
+        {
+            if (S.phase != GamePhase.WaveActive || dt <= 0) return;
+            S.waveTime += Math.Min(dt, 0.25f);
+            Changed?.Invoke();
         }
     }
 }
