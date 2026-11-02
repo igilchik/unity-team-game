@@ -78,7 +78,8 @@ namespace IslandTycoon
                              enabled = true, displayName = "Food", icon = "UI/Icons/icon_need_food", baseServiceTime = 7.2f },
             new NeedConfig { need = NeedType.Relax,     buildingName = "Pool",        spriteKey = "pool",
                              enabled = true, displayName = "Relax", icon = "UI/Icons/icon_need_relax", baseServiceTime = 8.0f },
-            new NeedConfig { need = NeedType.OceanView, buildingName = "Bungalows",   spriteKey = "bungalows" },
+            new NeedConfig { need = NeedType.OceanView, buildingName = "Bungalows",   spriteKey = "bungalows",
+                             enabled = true, displayName = "Ocean View", icon = "UI/Icons/icon_need_oceanview", baseServiceTime = 9.6f },
         };
 
         [Header("Island")]
