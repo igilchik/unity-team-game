@@ -27,6 +27,7 @@ namespace IslandTycoon
             Section("SCRUM-27 Start wave", () => StartWave(cfg));
             Section("SCRUM-40 Guest needs generation", () => NeedsGeneration(cfg));
             Section("SCRUM-47 Wave Needs Panel during a wave", () => NeedsPanelDuringWave(cfg));
+            Section("SCRUM-79 Moving workers between buildings", () => WorkerMoves(cfg));
 
             _sb.Insert(0, _fails == 0 ? "ALL CHECKS PASSED\n" : $"{_fails} CHECK(S) FAILED\n");
             return _sb.ToString();
@@ -271,6 +272,68 @@ namespace IslandTycoon
                 Check(!mb.IsBottleneck((int)NeedType.Drinks) && !panel.RowWarning((int)NeedType.Drinks), "other needs are fine");
             }
             finally { Dispose(go2); Dispose(rush); }
+        }
+    
+
+        // ------------------------------------------------------------------ SCRUM-79
+
+        static void WorkerMoves(GameConfig cfg)
+        {
+            int rooms = (int)NeedType.Rooms, drinks = (int)NeedType.Drinks, food = (int)NeedType.Food, relax = (int)NeedType.Relax;
+            var m = new GameModel(cfg);
+            Check(m.S.totalWorkers == cfg.island.startWorkers, "resort starts with the configured workers");
+            Check(m.Workers(rooms) == 1 && m.Workers(drinks) == 1 && m.Workers(food) == 1 && m.FreeWorkers == 0,
+                "one worker in every open building");
+            Check(m.Workers(relax) == 0, "no workers in a locked building");
+
+            int moves = 0;
+            m.WorkersMoved += n => moves++;
+            int coins = m.S.coins;
+            Check(!m.AssignWorker(drinks), "no free worker = cannot assign");
+            Check(m.UnassignWorker(rooms) && m.FreeWorkers == 1 && m.Workers(rooms) == 0, "worker leaves the Hotel and is free");
+            Check(m.AssignWorker(drinks) && m.Workers(drinks) == 2 && m.FreeWorkers == 0, "free worker goes to the Bar");
+            Check(!m.UnassignWorker(rooms), "cannot take a worker from an empty building");
+            Check(m.UnassignWorker(food) && !m.AssignWorker(relax) && m.FreeWorkers == 1, "locked Pool takes no workers");
+            m.AssignWorker(food);
+            Check(m.AssignedWorkers + m.FreeWorkers == m.S.totalWorkers, "no worker is lost or created");
+            Check(moves == 4 && m.S.coins == coins, "every move is reported and costs nothing");
+
+            // during the wave
+            m.StartWave();
+            Check(m.CanMoveWorkers, "workers can be moved during the wave");
+            Check(m.PullWorker(rooms) && m.Workers(rooms) == 1 && m.Workers(drinks) == 1,
+                "+ without free workers takes one from the busiest building");
+            Check(m.UnassignWorker(food) && m.AssignWorker(drinks) && m.Workers(drinks) == 2, "moves are instant during the wave");
+            Check(m.AssignedWorkers + m.FreeWorkers == m.S.totalWorkers, "still no worker lost");
+
+            // the UI follows the moves
+            var m2 = new GameModel(cfg);
+            int selected = drinks;
+            var go = new GameObject("SelfTest_Workers");
+            try
+            {
+                var hud = go.AddComponent<HudView>();
+                hud.Build(m2);
+                var panel = go.AddComponent<WorkerPanel>();
+                panel.Build(m2, hud.Root, () => selected, d => { if (d > 0) m2.PullWorker(selected); else m2.MoveWorker(selected, -1); }, () => selected = -1);
+                panel.Refresh();
+                Check(panel.Panel.gameObject.activeSelf && panel.WorkersText.text.EndsWith("1"), "panel shows the Bar with 1 worker");
+                Check(hud.FreeWorkersText.text.EndsWith("0"), "HUD shows 0 free workers");
+                panel.Minus.onClick.Invoke();
+                Check(panel.WorkersText.text.EndsWith("0") && panel.FreeText.text.Contains("1"), "- updates the panel");
+                Check(hud.FreeWorkersText.text.EndsWith("1"), "- updates the free workers in the HUD");
+                panel.Plus.onClick.Invoke();
+                Check(panel.WorkersText.text.EndsWith("1") && hud.FreeWorkersText.text.EndsWith("0"), "+ updates panel and HUD");
+
+                selected = relax;
+                panel.Refresh();
+                Check(!panel.Minus.gameObject.activeSelf && !panel.Plus.gameObject.activeSelf && panel.InfoText.text.Contains("wave"),
+                    "locked building shows when it opens, no - / +");
+                selected = -1;
+                panel.Refresh();
+                Check(!panel.Panel.gameObject.activeSelf, "panel closes when nothing is selected");
+            }
+            finally { Dispose(go); }
         }
     }
 }
