@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace IslandTycoon
 {
@@ -62,6 +63,55 @@ namespace IslandTycoon
         }
     
 
+        // ------------------------------------------------------------------ guest needs
+
+        /// <summary>
+        /// Guests of a wave and their needs, from the config of that wave. Only active needs are used.
+        /// Deterministic per wave, so the same wave always brings the same guests.
+        /// </summary>
+        public List<GuestPlan> GeneratePlans(int waveIndex)
+        {
+            var wc = Cfg.Wave(waveIndex);
+            var rnd = new System.Random(1000 + waveIndex * 7919);
+            var plans = new List<GuestPlan>();
+            var active = new List<int>();
+            foreach (var n in Needs.All) if (IsNeedActive((int)n)) active.Add((int)n);
+            if (active.Count == 0) return plans;
+
+            int guests = Math.Max(1, wc.guests);
+            for (int i = 0; i < guests; i++)
+            {
+                var p = new GuestPlan { time = i * wc.spacing, skin = rnd.Next(0, 6) };
+                int count = Math.Max(1, Math.Min(rnd.Next(wc.minNeeds, wc.maxNeeds + 1), active.Count));
+                var pool = new List<int>(active);
+                for (int k = 0; k < count; k++)
+                {
+                    float total = 0;
+                    foreach (var n in pool) total += Weight(wc, n);
+                    float r = (float)rnd.NextDouble() * total;
+                    int pick = pool[pool.Count - 1];
+                    foreach (var n in pool) { r -= Weight(wc, n); if (r <= 0) { pick = n; break; } }
+                    p.needs.Add(pick);
+                    pool.Remove(pick);
+                }
+                plans.Add(p);
+            }
+            return plans;
+        }
+
+        float Weight(WaveConfig wc, int need)
+        {
+            float w = wc.weights != null && need < wc.weights.Length ? wc.weights[need] : 1f;
+            return Math.Max(0.01f, w * Cfg.Need(need).weight);
+        }
+
+        static List<NeedStats> NewStats()
+        {
+            var l = new List<NeedStats>();
+            for (int i = 0; i < Needs.Count; i++) l.Add(new NeedStats());
+            return l;
+        }
+
         // ------------------------------------------------------------------ wave
 
         /// <summary>A wave can be started only while the resort is in AWAITING_WAVE.</summary>
@@ -71,6 +121,9 @@ namespace IslandTycoon
         public bool StartWave()
         {
             if (!CanStartWave) return false;
+            S.plans = GeneratePlans(S.waveIndex);
+            S.stats = NewStats();
+            foreach (var p in S.plans) foreach (var n in p.needs) S.stats[n].requested++;
             S.waveTime = 0;
             S.phase = GamePhase.WaveActive;
             WaveStarted?.Invoke();
