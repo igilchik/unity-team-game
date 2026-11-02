@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,6 +11,7 @@ namespace IslandTycoon
     /// SCRUM-21: every value is read from the current game data and refreshed on GameModel.Changed.
     /// SCRUM-23: the plaque shows the wave number and the AWAITING_WAVE state.
     /// SCRUM-26: ... and the running wave.
+    /// SCRUM-24: START WAVE button, the primary action in the bottom-right corner (thumb reach).
     /// </summary>
     public class HudView : MonoBehaviour
     {
@@ -18,14 +20,16 @@ namespace IslandTycoon
         GameModel _m;
         RectTransform _root;
         Text _title, _status, _coins, _energy, _value;
+        Button _startWave;
 
         public Text TitleText => _title;
         public Text StatusText => _status;
         public Text CoinsText => _coins;
         public Text EnergyText => _energy;
         public Text ValueText => _value;
+        public Button StartWaveButton => _startWave;
 
-        public void Build(GameModel model)
+        public void Build(GameModel model, Action onStartWave = null)
         {
             _m = model;
             var canvas = UIFactory.Canvas("HudCanvas", 10);
@@ -44,6 +48,10 @@ namespace IslandTycoon
             _coins = Pill("Coins", "UI/Icons/icon_coin", tl, new Vector2(20, -16));
             _energy = Pill("Energy", "UI/Icons/icon_energy", tl, new Vector2(270, -16));
             _value = Pill("ResortValue", "UI/Icons/icon_resort_value", tl, new Vector2(520, -16));
+
+            // primary action (bottom right)
+            _startWave = UIFactory.Button("StartWave", _root, "UI/Kit/btn_primary_orange", "START WAVE", 46,
+                new Vector2(1, 0), new Vector2(-24, 20), new Vector2(370, 0), () => onStartWave?.Invoke());
 
             _m.Changed += Refresh;
             Refresh();
