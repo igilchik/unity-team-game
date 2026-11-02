@@ -54,6 +54,7 @@ namespace IslandTycoon
     {
         [Header("Start")]
         public int startCoins = 60;
+        public int startEnergy = 6;
 
         [Header("Needs / buildings")]
         public NeedConfig[] needs =

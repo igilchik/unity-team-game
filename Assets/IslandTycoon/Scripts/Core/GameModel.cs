@@ -17,7 +17,7 @@ namespace IslandTycoon
 
         GameState NewState()
         {
-            var s = new GameState { coins = Cfg.startCoins };
+            var s = new GameState { coins = Cfg.startCoins, energy = Cfg.startEnergy };
             foreach (var n in Needs.All)
             {
                 var plot = Cfg.Plot((int)n);
