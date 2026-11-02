@@ -56,13 +56,14 @@ namespace IslandTycoon
     public class PlotView : IslandTouch
     {
         public int Need;
-        public SpriteRenderer Body;
+        public SpriteRenderer Body, Warning;
         public float Top = 2f;
     }
 
     /// <summary>
     /// SCRUM-15: Home / Island View. Renders the resort island; holds no game rules.
     /// SCRUM-16: shows every building plot, open buildings and locked areas.
+    /// SCRUM-46: a pulsing warning sign above a building with a bottleneck.
     /// </summary>
     public class WorldView : MonoBehaviour
     {
@@ -126,6 +127,8 @@ namespace IslandTycoon
             pv.Need = need;
             pv.Controller = _c;
             pv.Body = Art.MakeSprite("Body", root.transform, null, Layout.Order(Layout.PlotBase(need).y));
+            pv.Warning = Art.MakeSprite("Warning", root.transform, "UI/Icons/icon_warning", 9000);
+            pv.Warning.gameObject.SetActive(false);
             RefreshPlotArt(pv);
             return pv;
         }
@@ -143,6 +146,25 @@ namespace IslandTycoon
             if (old != null) Destroy(old);
             pv.Body.gameObject.AddComponent<BoxCollider2D>();
             pv.Top = pv.Body.sprite != null ? pv.Body.sprite.bounds.size.y * pv.Body.transform.localScale.y : 2f;
+        }
+
+        void LateUpdate()
+        {
+            if (_c == null || M == null) return;
+            float t = Time.time;
+            foreach (var pv in _plots.Values) SyncPlot(pv, t);
+        }
+
+        void SyncPlot(PlotView pv, float t)
+        {
+            bool bottleneck = M.IsBottleneck(pv.Need);
+            pv.Warning.gameObject.SetActive(bottleneck);
+            if (bottleneck && pv.Warning.sprite != null)
+            {
+                float k = 0.7f / Mathf.Max(0.01f, pv.Warning.sprite.bounds.size.y) * (1f + Mathf.Sin(t * 8f) * 0.1f);
+                pv.Warning.transform.localScale = new Vector3(k, k, 1);
+                pv.Warning.transform.localPosition = new Vector3(0, pv.Top + 0.3f, 0);
+            }
         }
 
         void AddSea(Sprite sprite, bool mirror, Vector2 center, float scale)
