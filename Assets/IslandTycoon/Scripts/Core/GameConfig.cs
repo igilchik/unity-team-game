@@ -45,6 +45,8 @@ namespace IslandTycoon
         public string background = "Backgrounds/island_main";
         [Tooltip("Size of the background art in pixels (used when the sprite is missing)")]
         public Vector2 backgroundPixels = new Vector2(1672, 941);
+        [Tooltip("Workers the resort starts with, spread over the open buildings")]
+        public int startWorkers = 3;
         public PlotConfig[] plots =
         {
             new PlotConfig { need = NeedType.Rooms,     pixel = new Vector2(460, 355),  width = 250 },

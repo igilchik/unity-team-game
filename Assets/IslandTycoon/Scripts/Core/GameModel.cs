@@ -35,6 +35,16 @@ namespace IslandTycoon
                     unlocked = plot != null && plot.unlockAfterWave == 0,
                 });
             }
+
+            // start workers: one by one to the open buildings, the rest stays free
+            s.totalWorkers = Math.Max(0, Cfg.island.startWorkers);
+            int w = s.totalWorkers;
+            while (w > 0)
+            {
+                bool any = false;
+                foreach (var b in s.buildings) if (b.unlocked && w > 0) { b.workers++; w--; any = true; }
+                if (!any) break;
+            }
             return s;
         }
 
@@ -56,6 +66,14 @@ namespace IslandTycoon
 
         /// <summary>Guests can ask for the need now: the need type is implemented and its building is open.</summary>
         public bool IsNeedActive(int need) => Cfg.Need(need).enabled && B(need).exists && B(need).unlocked;
+
+        /// <summary>Workers working in some building.</summary>
+        public int AssignedWorkers { get { int n = 0; foreach (var b in S.buildings) n += b.workers; return n; } }
+
+        /// <summary>Workers waiting for a job (standing by the pier).</summary>
+        public int FreeWorkers => S.totalWorkers - AssignedWorkers;
+
+        public int Workers(int need) => B(need).workers;
 
         /// <summary>Aggregated numbers of one need in the current wave.</summary>
         public NeedStats Stats(int need) => S.stats[need];
