@@ -60,6 +60,28 @@ namespace IslandTycoon
         /// <summary>Aggregated numbers of one need in the current wave.</summary>
         public NeedStats Stats(int need) => S.stats[need];
 
+        /// <summary>Guests waiting in the queue of a building.</summary>
+        public int QueueCount(int need)
+        {
+            int n = 0;
+            foreach (var g in S.guests) if (g.stage == GuestStage.Queued && g.CurrentNeed == need) n++;
+            return n;
+        }
+
+        /// <summary>Guests being served by a building right now.</summary>
+        public int InServiceCount(int need)
+        {
+            int n = 0;
+            foreach (var g in S.guests) if (g.stage == GuestStage.InService && g.CurrentNeed == need) n++;
+            return n;
+        }
+
+        /// <summary>Guests of the wave that have not arrived yet.</summary>
+        public int GuestsToCome => S.plans.Count - S.nextPlan;
+
+        /// <summary>Everybody arrived and every request was served.</summary>
+        public bool AllGuestsDone => S.phase == GamePhase.WaveActive && GuestsToCome == 0 && S.guests.Count == 0;
+
         public int OpenBuildings
         {
             get { int n = 0; foreach (var b in S.buildings) if (b.exists && b.unlocked) n++; return n; }
@@ -127,6 +149,8 @@ namespace IslandTycoon
             S.plans = GeneratePlans(S.waveIndex);
             S.stats = NewStats();
             foreach (var p in S.plans) foreach (var n in p.needs) S.stats[n].requested++;
+            S.guests.Clear();
+            S.nextPlan = 0;
             S.waveTime = 0;
             S.phase = GamePhase.WaveActive;
             WaveStarted?.Invoke();
@@ -134,12 +158,76 @@ namespace IslandTycoon
             return true;
         }
 
-        /// <summary>Advances the active wave by dt seconds.</summary>
+        /// <summary>
+        /// Advances the active wave by dt seconds: guests arrive, walk to the building of their need,
+        /// queue, get served (first come, first served) and go on to their next need or leave.
+        /// </summary>
         public void Tick(float dt)
         {
             if (S.phase != GamePhase.WaveActive || dt <= 0) return;
-            S.waveTime += Math.Min(dt, 0.25f);
+            dt = Math.Min(dt, 0.25f);
+            S.waveTime += dt;
+
+            // arrivals
+            while (S.nextPlan < S.plans.Count && S.plans[S.nextPlan].time <= S.waveTime)
+            {
+                var p = S.plans[S.nextPlan++];
+                S.guests.Add(new Guest
+                {
+                    id = S.nextGuestId++, skin = p.skin, needs = new List<int>(p.needs),
+                    stage = GuestStage.Walking, timer = Cfg.walkTime,
+                });
+            }
+
+            // guests
+            foreach (var g in S.guests)
+            {
+                switch (g.stage)
+                {
+                    case GuestStage.Walking:
+                        g.timer -= dt;
+                        if (g.timer <= 0) { g.stage = GuestStage.Queued; g.waited = 0; }
+                        break;
+                    case GuestStage.Queued:
+                        g.waited += dt;
+                        break;
+                    case GuestStage.InService:
+                        g.progress += dt / Math.Max(0.1f, Cfg.Need(g.CurrentNeed).baseServiceTime);
+                        if (g.progress >= 1f) Serve(g);
+                        break;
+                    case GuestStage.Leaving:
+                        g.timer -= dt;
+                        if (g.timer <= 0) g.stage = GuestStage.Done;
+                        break;
+                }
+            }
+            S.guests.RemoveAll(g => g.stage == GuestStage.Done);
+
+            // queues -> free service slots, first come first served
+            foreach (var b in S.buildings)
+            {
+                if (!b.unlocked) continue;
+                int free = Math.Max(1, Cfg.serviceSlots) - InServiceCount(b.need);
+                foreach (var g in S.guests)
+                {
+                    if (free <= 0) break;
+                    if (g.stage != GuestStage.Queued || g.CurrentNeed != b.need) continue;
+                    g.stage = GuestStage.InService;
+                    g.progress = 0;
+                    free--;
+                }
+            }
             Changed?.Invoke();
+        }
+
+        void Serve(Guest g)
+        {
+            S.stats[g.CurrentNeed].served++;
+            g.index++;
+            g.progress = 0;
+            g.waited = 0;
+            g.timer = Cfg.walkTime;
+            g.stage = g.index < g.needs.Count ? GuestStage.Walking : GuestStage.Leaving;
         }
     }
 }

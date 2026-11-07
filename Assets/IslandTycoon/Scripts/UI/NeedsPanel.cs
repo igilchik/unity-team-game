@@ -7,6 +7,7 @@ namespace IslandTycoon
     /// SCRUM-42: Wave Needs Panel on the left edge, so the island stays visible.
     /// One row per need guests can ask for (icon + name).
     /// SCRUM-43: aggregated state of every need (served / requested in the wave).
+    /// SCRUM-44: the values follow the active wave live (served, guests waiting).
     /// </summary>
     public class NeedsPanel : MonoBehaviour
     {
@@ -49,13 +50,13 @@ namespace IslandTycoon
                     new Vector2(0, 0.5f), new Vector2(84, -17), new Vector2(170, 30));
                 _rowValue[n].rectTransform.pivot = new Vector2(0, 0.5f);
             }
-            _m.WaveStarted += Refresh;
+            _m.Changed += Refresh;
             Refresh();
         }
 
         void OnDestroy()
         {
-            if (_m != null) _m.WaveStarted -= Refresh;
+            if (_m != null) _m.Changed -= Refresh;
         }
 
         /// <summary>Rows, header and the aggregated value of every need.</summary>
@@ -71,11 +72,11 @@ namespace IslandTycoon
             }
         }
 
-        /// <summary>Aggregated state of one need, e.g. "2/5 served".</summary>
-        protected virtual string Aggregate(int need)
+        /// <summary>Aggregated state of one need, e.g. "2/5 · 1 wait".</summary>
+        string Aggregate(int need)
         {
             var st = _m.Stats(need);
-            return $"<color=#2E7D32>{st.served}/{st.requested} served</color>";
+            return $"<color=#2E7D32>{st.served}/{st.requested} · {_m.QueueCount(need)} wait</color>";
         }
 
         /// <summary>Shows only the needs guests can ask for now and stacks them from the top.</summary>
