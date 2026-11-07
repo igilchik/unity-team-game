@@ -49,12 +49,17 @@ namespace IslandTycoon
         public void OnScroll(PointerEventData e) => Controller.Rig.Scroll(e);
     }
 
-    /// <summary>Island art and the sea around it.</summary>
-    public class IslandBackground : IslandTouch { }
-
-    /// <summary>One building plot on the island.</summary>
-    public class PlotView : IslandTouch
+    /// <summary>Island art and the sea around it. A tap on empty island closes the building panel.</summary>
+    public class IslandBackground : IslandTouch, IPointerClickHandler
     {
+        public void OnPointerClick(PointerEventData e) => Controller.SelectBuilding(-1);
+    }
+
+    /// <summary>One building plot on the island; tap to select it.</summary>
+    public class PlotView : IslandTouch, IPointerClickHandler
+    {
+        public void OnPointerClick(PointerEventData e) => Controller.SelectBuilding(Need);
+
         public int Need;
         public SpriteRenderer Body, Warning;
         public float Top = 2f;
@@ -64,6 +69,7 @@ namespace IslandTycoon
     /// SCRUM-15: Home / Island View. Renders the resort island; holds no game rules.
     /// SCRUM-16: shows every building plot, open buildings and locked areas.
     /// SCRUM-46: a pulsing warning sign above a building with a bottleneck.
+    /// SCRUM-75: the selected building gently pulses.
     /// </summary>
     public class WorldView : MonoBehaviour
     {
@@ -157,6 +163,9 @@ namespace IslandTycoon
 
         void SyncPlot(PlotView pv, float t)
         {
+            float sel = _c.Selected == pv.Need ? 1f + Mathf.Sin(t * 5f) * 0.015f : 1f;
+            pv.transform.localScale = new Vector3(sel, sel, 1);
+
             bool bottleneck = M.IsBottleneck(pv.Need);
             pv.Warning.gameObject.SetActive(bottleneck);
             if (bottleneck && pv.Warning.sprite != null)

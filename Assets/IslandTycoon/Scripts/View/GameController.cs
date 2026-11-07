@@ -26,6 +26,8 @@ namespace IslandTycoon
     {
         public GameModel Model { get; private set; }
         public CameraRig Rig { get; private set; }
+        /// <summary>Building whose worker panel is open, -1 = none.</summary>
+        public int Selected { get; private set; } = -1;
 
         /// <summary>The game waits while the main menu covers it.</summary>
         public bool Paused => MainMenu.Instance != null && MainMenu.Instance.IsOpen;
@@ -34,6 +36,7 @@ namespace IslandTycoon
         WorldView _world;
         HudView _hud;
         NeedsPanel _needs;
+        WorkerPanel _workers;
 
         void Awake()
         {
@@ -54,6 +57,9 @@ namespace IslandTycoon
             _needs = _hud.gameObject.AddComponent<NeedsPanel>();
             _needs.Build(Model, _hud.Root);
 
+            _workers = _hud.gameObject.AddComponent<WorkerPanel>();
+            _workers.Build(Model, _hud.Root, () => Selected, MoveWorker, () => SelectBuilding(-1));
+
             MainMenu.PlayPressed += OnPlay;
         }
 
@@ -66,6 +72,20 @@ namespace IslandTycoon
 
         /// <summary>START WAVE button.</summary>
         public void StartWave() => Model.StartWave();
+
+        /// <summary>Tap on a building (again = close), -1 closes the worker panel.</summary>
+        public void SelectBuilding(int need)
+        {
+            if (Paused) return;
+            Selected = need < 0 || Selected == need ? -1 : need;
+        }
+
+        /// <summary>- / + in the worker panel for the selected building.</summary>
+        public void MoveWorker(int delta)
+        {
+            if (Selected < 0) return;
+            Model.MoveWorker(Selected, delta);
+        }
 
         void SetupCamera()
         {

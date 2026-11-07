@@ -127,6 +127,9 @@ namespace IslandTycoon
 
         // ------------------------------------------------------------------ workers
 
+        /// <summary>Workers can be moved while the player prepares the resort (AWAITING_WAVE).</summary>
+        public bool CanMoveWorkers => S.phase == GamePhase.AwaitingWave;
+
         /// <summary>Puts a free worker into an open building.</summary>
         public bool AssignWorker(int need) => MoveWorker(need, +1);
 
@@ -139,6 +142,7 @@ namespace IslandTycoon
         /// </summary>
         public bool MoveWorker(int need, int delta)
         {
+            if (!CanMoveWorkers) return false;
             if (need < 0 || need >= S.buildings.Count || delta == 0) return false;
             var b = B(need);
             if (!b.exists || !b.unlocked) return false;
