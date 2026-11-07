@@ -92,6 +92,7 @@ namespace IslandTycoon
         {
             if (Paused) return;
             Rig.Update();
+            Model.Tick(Time.deltaTime);
         }
     }
 }
