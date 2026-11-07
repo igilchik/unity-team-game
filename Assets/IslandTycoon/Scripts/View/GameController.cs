@@ -33,6 +33,7 @@ namespace IslandTycoon
         Camera _cam;
         WorldView _world;
         HudView _hud;
+        NeedsPanel _needs;
 
         void Awake()
         {
@@ -49,6 +50,9 @@ namespace IslandTycoon
             _hud = new GameObject("Hud").AddComponent<HudView>();
             _hud.transform.SetParent(transform, false);
             _hud.Build(Model, StartWave);
+
+            _needs = _hud.gameObject.AddComponent<NeedsPanel>();
+            _needs.Build(Model, _hud.Root);
 
             MainMenu.PlayPressed += OnPlay;
         }
