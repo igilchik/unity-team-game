@@ -7,6 +7,7 @@ namespace IslandTycoon
     /// Screen-space HUD over the island.
     /// SCRUM-17: current state of the resort in the title plaque.
     /// SCRUM-18: Coins. SCRUM-19: Energy. SCRUM-20: Resort Value.
+    /// SCRUM-21: every value is read from the current game data and refreshed on GameModel.Changed.
     /// </summary>
     public class HudView : MonoBehaviour
     {
@@ -36,17 +37,30 @@ namespace IslandTycoon
             _title = UIFactory.FitText("Title", pin, "", 40, Color.white, TextAnchor.MiddleCenter, new Vector2(0, 0.42f), new Vector2(1, 1), true);
             _status = UIFactory.FitText("Status", pin, "", 22, UIFactory.Cream, TextAnchor.MiddleCenter, new Vector2(0, 0), new Vector2(1, 0.46f));
 
-            _title.text = _m.IC.name.ToUpperInvariant();
-            _status.text = ResortStatus();
-
             // currencies (top left)
             var tl = new Vector2(0, 1);
             _coins = Pill("Coins", "UI/Icons/icon_coin", tl, new Vector2(20, -16));
-            _coins.text = _m.S.coins.ToString();
             _energy = Pill("Energy", "UI/Icons/icon_energy", tl, new Vector2(270, -16));
-            _energy.text = _m.S.energy.ToString();
             _value = Pill("ResortValue", "UI/Icons/icon_resort_value", tl, new Vector2(520, -16));
-            _value.text = _m.S.resortValue.ToString();
+
+            _m.Changed += Refresh;
+            Refresh();
+        }
+
+        void OnDestroy()
+        {
+            if (_m != null) _m.Changed -= Refresh;
+        }
+
+        /// <summary>Copies the current game data into the HUD (only texts that really changed are touched).</summary>
+        public void Refresh()
+        {
+            var s = _m.S;
+            UIFactory.SetText(_title, _m.IC.name.ToUpperInvariant());
+            UIFactory.SetText(_status, ResortStatus());
+            UIFactory.SetText(_coins, s.coins.ToString());
+            UIFactory.SetText(_energy, s.energy.ToString());
+            UIFactory.SetText(_value, s.resortValue.ToString());
         }
 
         /// <summary>Wooden pill with an icon on the left and a number inside.</summary>

@@ -1,3 +1,5 @@
+using System;
+
 namespace IslandTycoon
 {
     /// <summary>
@@ -8,6 +10,9 @@ namespace IslandTycoon
     {
         public readonly GameConfig Cfg;
         public GameState S { get; private set; }
+
+        /// <summary>Raised after every change of the game state; the UI refreshes from it.</summary>
+        public event Action Changed;
 
         public GameModel(GameConfig cfg)
         {
@@ -30,6 +35,9 @@ namespace IslandTycoon
             }
             return s;
         }
+
+        /// <summary>Tells the views that the state changed (also after direct edits of S).</summary>
+        public void NotifyChanged() => Changed?.Invoke();
 
         // ------------------------------------------------------------------ queries
 
