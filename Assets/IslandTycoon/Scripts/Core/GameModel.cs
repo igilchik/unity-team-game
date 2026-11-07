@@ -42,6 +42,10 @@ namespace IslandTycoon
         // ------------------------------------------------------------------ queries
 
         public IslandConfig IC => Cfg.island;
+        public GamePhase Phase => S.phase;
+        public bool AwaitingWave => S.phase == GamePhase.AwaitingWave;
+        /// <summary>1-based number of the next / current wave.</summary>
+        public int WaveNumber => S.waveIndex + 1;
         public BuildingState B(int need) => S.buildings[need];
         public BuildingState B(NeedType need) => S.buildings[(int)need];
         public bool Exists(int need) => B(need).exists;
