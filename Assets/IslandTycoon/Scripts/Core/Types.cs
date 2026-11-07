@@ -25,6 +25,8 @@ namespace IslandTycoon
     [Serializable]
     public class GameState
     {
+        public int coins;
+        public int energy;
         public List<BuildingState> buildings = new List<BuildingState>();
     }
 }
