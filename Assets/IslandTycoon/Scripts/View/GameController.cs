@@ -48,7 +48,7 @@ namespace IslandTycoon
 
             _hud = new GameObject("Hud").AddComponent<HudView>();
             _hud.transform.SetParent(transform, false);
-            _hud.Build(Model);
+            _hud.Build(Model, StartWave);
 
             MainMenu.PlayPressed += OnPlay;
         }
@@ -57,6 +57,11 @@ namespace IslandTycoon
 
         /// <summary>PLAY in the main menu: show the island from its default view.</summary>
         void OnPlay() => Rig.Reset();
+
+        // ------------------------------------------------------------------ commands from the UI
+
+        /// <summary>START WAVE button.</summary>
+        public void StartWave() => Model.StartWave();
 
         void SetupCamera()
         {
