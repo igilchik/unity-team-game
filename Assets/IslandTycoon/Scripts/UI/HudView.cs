@@ -12,6 +12,7 @@ namespace IslandTycoon
     /// SCRUM-23: the plaque shows the wave number and the AWAITING_WAVE state.
     /// SCRUM-26: ... and the running wave.
     /// SCRUM-24: START WAVE button, the primary action in the bottom-right corner (thumb reach).
+    /// SCRUM-25: the button is shown and active only in AWAITING_WAVE.
     /// </summary>
     public class HudView : MonoBehaviour
     {
@@ -51,7 +52,7 @@ namespace IslandTycoon
 
             // primary action (bottom right)
             _startWave = UIFactory.Button("StartWave", _root, "UI/Kit/btn_primary_orange", "START WAVE", 46,
-                new Vector2(1, 0), new Vector2(-24, 20), new Vector2(370, 0), () => onStartWave?.Invoke());
+                new Vector2(1, 0), new Vector2(-24, 20), new Vector2(370, 0), () => { if (_m.CanStartWave) onStartWave?.Invoke(); });
 
             _m.Changed += Refresh;
             Refresh();
@@ -71,6 +72,9 @@ namespace IslandTycoon
             UIFactory.SetText(_coins, s.coins.ToString());
             UIFactory.SetText(_energy, s.energy.ToString());
             UIFactory.SetText(_value, s.resortValue.ToString());
+
+            UIFactory.SetActive(_startWave, _m.CanStartWave);
+            _startWave.interactable = _m.CanStartWave;
         }
 
         /// <summary>Wooden pill with an icon on the left and a number inside.</summary>

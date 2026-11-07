@@ -92,6 +92,7 @@ namespace IslandTycoon
             var m = new GameModel(cfg);
             Check(m.Phase == GamePhase.AwaitingWave && m.AwaitingWave, "new game starts in AWAITING_WAVE");
             Check(m.WaveNumber == 1, "first wave is wave 1");
+            Check(m.CanStartWave, "Start Wave allowed in AWAITING_WAVE");
         }
     }
 }
