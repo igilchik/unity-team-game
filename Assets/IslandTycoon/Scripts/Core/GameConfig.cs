@@ -10,6 +10,17 @@ namespace IslandTycoon
         public string buildingName;
         [Tooltip("Sprite key: Buildings/<key>_lv1")]
         public string spriteKey;
+
+        [Header("Guest need")]
+        [Tooltip("Guests can ask for this need (its building must be open)")]
+        public bool enabled;
+        public string displayName;
+        [Tooltip("Icon sprite key, shown in guest bubbles and panels")]
+        public string icon;
+        [Tooltip("Seconds to serve one guest")]
+        public float baseServiceTime = 4f;
+        [Tooltip("How often guests ask for this need compared to the others")]
+        public float weight = 1f;
     }
 
     [Serializable]
@@ -59,7 +70,8 @@ namespace IslandTycoon
         [Header("Needs / buildings")]
         public NeedConfig[] needs =
         {
-            new NeedConfig { need = NeedType.Rooms,     buildingName = "Guest Hotel", spriteKey = "rooms" },
+            new NeedConfig { need = NeedType.Rooms,     buildingName = "Guest Hotel", spriteKey = "rooms",
+                             enabled = true, displayName = "Rooms", icon = "UI/Icons/icon_need_rooms", baseServiceTime = 8.0f },
             new NeedConfig { need = NeedType.Drinks,    buildingName = "Tiki Bar",    spriteKey = "bar" },
             new NeedConfig { need = NeedType.Food,      buildingName = "Restaurant",  spriteKey = "food" },
             new NeedConfig { need = NeedType.Relax,     buildingName = "Pool",        spriteKey = "pool" },
@@ -83,7 +95,7 @@ namespace IslandTycoon
         {
             foreach (var n in needs) if ((int)n.need == t) return n;
             string name = ((NeedType)t).ToString();
-            return new NeedConfig { need = (NeedType)t, buildingName = name, spriteKey = name.ToLower() };
+            return new NeedConfig { need = (NeedType)t, buildingName = name, spriteKey = name.ToLower(), displayName = name };
         }
 
         public PlotConfig Plot(int need)
