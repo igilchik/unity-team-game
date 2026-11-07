@@ -27,6 +27,22 @@ namespace IslandTycoon
         public bool unlocked;    // the building is open (locked areas open later)
     }
 
+    /// <summary>One guest of a wave, generated before the wave starts.</summary>
+    [Serializable]
+    public class GuestPlan
+    {
+        public float time;           // arrival, seconds after the wave start
+        public int skin;             // which guest picture
+        public List<int> needs = new List<int>();   // NeedType values, in order
+    }
+
+    /// <summary>Per-need numbers of the current wave.</summary>
+    [Serializable]
+    public class NeedStats
+    {
+        public int requested;
+    }
+
     /// <summary>Whole state of the resort.</summary>
     [Serializable]
     public class GameState
@@ -40,6 +56,8 @@ namespace IslandTycoon
 
         // active wave
         public float waveTime;       // seconds since the wave started
+        public List<GuestPlan> plans = new List<GuestPlan>();
+        public List<NeedStats> stats = new List<NeedStats>();
         public List<BuildingState> buildings = new List<BuildingState>();
     }
 }

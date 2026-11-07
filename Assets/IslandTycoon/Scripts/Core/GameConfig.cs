@@ -55,6 +55,20 @@ namespace IslandTycoon
         };
     }
 
+    /// <summary>How many guests come in a wave and what they ask for.</summary>
+    [Serializable]
+    public class WaveConfig
+    {
+        public int guests = 5;
+        [Tooltip("Seconds between guest arrivals")]
+        public float spacing = 3f;
+        [Tooltip("Needs per guest (each guest asks for different needs)")]
+        public int minNeeds = 1;
+        public int maxNeeds = 1;
+        [Tooltip("Per-need weight multipliers: Rooms, Drinks, Food, Relax, OceanView")]
+        public float[] weights = { 1, 1, 1, 1, 1 };
+    }
+
     /// <summary>
     /// All tunable numbers live here, separate from game logic.
     /// Create an asset (Assets > Create > Island Tycoon > Game Config) in
@@ -85,6 +99,9 @@ namespace IslandTycoon
         [Header("Island")]
         public IslandConfig island = new IslandConfig();
 
+        [Header("Waves")]
+        public WaveConfig[] waves = { new WaveConfig() };
+
         public const string ResourcePath = "IslandTycoon/GameConfig";
 
         public static GameConfig Load()
@@ -100,6 +117,13 @@ namespace IslandTycoon
             foreach (var n in needs) if ((int)n.need == t) return n;
             string name = ((NeedType)t).ToString();
             return new NeedConfig { need = (NeedType)t, buildingName = name, spriteKey = name.ToLower(), displayName = name };
+        }
+
+        /// <summary>Config of a 0-based wave; past the end of the list the last wave repeats.</summary>
+        public WaveConfig Wave(int index)
+        {
+            if (waves == null || waves.Length == 0) return new WaveConfig();
+            return waves[Mathf.Clamp(index, 0, waves.Length - 1)];
         }
 
         public PlotConfig Plot(int need)
