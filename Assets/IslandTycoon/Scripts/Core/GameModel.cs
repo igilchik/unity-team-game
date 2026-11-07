@@ -76,6 +76,23 @@ namespace IslandTycoon
             return n;
         }
 
+        /// <summary>Longest wait in the queue of a building as a part of the guest patience (0..1+).</summary>
+        public float LongestWaitFraction(int need)
+        {
+            float w = 0;
+            foreach (var g in S.guests)
+                if (g.stage == GuestStage.Queued && g.CurrentNeed == need) w = Math.Max(w, g.waited / Math.Max(0.1f, Cfg.patience));
+            return w;
+        }
+
+        /// <summary>
+        /// Bottleneck: during a wave the queue at the building is too long or a guest
+        /// has been waiting too long. The player should send a worker there.
+        /// </summary>
+        public bool IsBottleneck(int need) =>
+            S.phase == GamePhase.WaveActive && IsNeedActive(need) &&
+            (QueueCount(need) >= Cfg.bottleneckQueue || LongestWaitFraction(need) > Cfg.bottleneckWaitFraction);
+
         /// <summary>Guests of the wave that have not arrived yet.</summary>
         public int GuestsToCome => S.plans.Count - S.nextPlan;
 

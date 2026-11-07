@@ -86,6 +86,14 @@ namespace IslandTycoon
         public float walkTime = 2f;
         [Tooltip("Guests served at the same time by one building")]
         public int serviceSlots = 1;
+        [Tooltip("Seconds a guest is willing to wait in a queue")]
+        public float patience = 12f;
+
+        [Header("Bottleneck")]
+        [Tooltip("This many guests waiting at one building = bottleneck")]
+        public int bottleneckQueue = 3;
+        [Tooltip("A guest waited longer than this part of the patience = bottleneck")]
+        public float bottleneckWaitFraction = 0.5f;
 
         [Header("Needs / buildings")]
         public NeedConfig[] needs =
