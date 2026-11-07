@@ -1,0 +1,323 @@
+using System;
+using System.Collections.Generic;
+
+namespace IslandTycoon
+{
+    /// <summary>
+    /// Pure game logic. No rendering, no MonoBehaviour: the view only reads state
+    /// and calls the public commands, so every rule is testable.
+    /// </summary>
+    public class GameModel
+    {
+        public readonly GameConfig Cfg;
+        public GameState S { get; private set; }
+
+        /// <summary>Raised after every change of the game state; the UI refreshes from it.</summary>
+        public event Action Changed;
+        public event Action WaveStarted;
+        /// <summary>Workers of a building changed (need).</summary>
+        public event Action<int> WorkersMoved;
+
+        public GameModel(GameConfig cfg)
+        {
+            Cfg = cfg;
+            S = NewState();
+        }
+
+        GameState NewState()
+        {
+            var s = new GameState { coins = Cfg.startCoins, energy = Cfg.startEnergy, stats = NewStats() };
+            foreach (var n in Needs.All)
+            {
+                var plot = Cfg.Plot((int)n);
+                s.buildings.Add(new BuildingState
+                {
+                    need = (int)n,
+                    exists = plot != null,
+                    unlocked = plot != null && plot.unlockAfterWave == 0,
+                });
+            }
+
+            // start workers: one by one to the open buildings, the rest stays free
+            s.totalWorkers = Math.Max(0, Cfg.island.startWorkers);
+            int w = s.totalWorkers;
+            while (w > 0)
+            {
+                bool any = false;
+                foreach (var b in s.buildings) if (b.unlocked && w > 0) { b.workers++; w--; any = true; }
+                if (!any) break;
+            }
+            return s;
+        }
+
+        /// <summary>Tells the views that the state changed (also after direct edits of S).</summary>
+        public void NotifyChanged() => Changed?.Invoke();
+
+        // ------------------------------------------------------------------ queries
+
+        public IslandConfig IC => Cfg.island;
+        public GamePhase Phase => S.phase;
+        public bool AwaitingWave => S.phase == GamePhase.AwaitingWave;
+        public bool WaveActive => S.phase == GamePhase.WaveActive;
+        /// <summary>1-based number of the next / current wave.</summary>
+        public int WaveNumber => S.waveIndex + 1;
+        public BuildingState B(int need) => S.buildings[need];
+        public BuildingState B(NeedType need) => S.buildings[(int)need];
+        public bool Exists(int need) => B(need).exists;
+        public PlotConfig Plot(int need) => Cfg.Plot(need);
+
+        /// <summary>Guests can ask for the need now: the need type is implemented and its building is open.</summary>
+        public bool IsNeedActive(int need) => Cfg.Need(need).enabled && B(need).exists && B(need).unlocked;
+
+        /// <summary>Workers working in some building.</summary>
+        public int AssignedWorkers { get { int n = 0; foreach (var b in S.buildings) n += b.workers; return n; } }
+
+        /// <summary>Workers waiting for a job (standing by the pier).</summary>
+        public int FreeWorkers => S.totalWorkers - AssignedWorkers;
+
+        public int Workers(int need) => B(need).workers;
+
+        /// <summary>Aggregated numbers of one need in the current wave.</summary>
+        public NeedStats Stats(int need) => S.stats[need];
+
+        /// <summary>Guests waiting in the queue of a building.</summary>
+        public int QueueCount(int need)
+        {
+            int n = 0;
+            foreach (var g in S.guests) if (g.stage == GuestStage.Queued && g.CurrentNeed == need) n++;
+            return n;
+        }
+
+        /// <summary>Guests being served by a building right now.</summary>
+        public int InServiceCount(int need)
+        {
+            int n = 0;
+            foreach (var g in S.guests) if (g.stage == GuestStage.InService && g.CurrentNeed == need) n++;
+            return n;
+        }
+
+        /// <summary>Longest wait in the queue of a building as a part of the guest patience (0..1+).</summary>
+        public float LongestWaitFraction(int need)
+        {
+            float w = 0;
+            foreach (var g in S.guests)
+                if (g.stage == GuestStage.Queued && g.CurrentNeed == need) w = Math.Max(w, g.waited / Math.Max(0.1f, Cfg.patience));
+            return w;
+        }
+
+        /// <summary>
+        /// Bottleneck: during a wave the queue at the building is too long or a guest
+        /// has been waiting too long. The player should send a worker there.
+        /// </summary>
+        public bool IsBottleneck(int need) =>
+            S.phase == GamePhase.WaveActive && IsNeedActive(need) &&
+            (QueueCount(need) >= Cfg.bottleneckQueue || LongestWaitFraction(need) > Cfg.bottleneckWaitFraction);
+
+        /// <summary>Guests of the wave that have not arrived yet.</summary>
+        public int GuestsToCome => S.plans.Count - S.nextPlan;
+
+        /// <summary>Everybody arrived and every request was served.</summary>
+        public bool AllGuestsDone => S.phase == GamePhase.WaveActive && GuestsToCome == 0 && S.guests.Count == 0;
+
+        public int OpenBuildings
+        {
+            get { int n = 0; foreach (var b in S.buildings) if (b.exists && b.unlocked) n++; return n; }
+        }
+    
+
+        // ------------------------------------------------------------------ workers
+
+        /// <summary>
+        /// Workers can be moved while the player prepares the resort (AWAITING_WAVE)
+        /// and also during an active wave, to react to bottlenecks. Moves are instant and free.
+        /// </summary>
+        public bool CanMoveWorkers => S.phase == GamePhase.AwaitingWave || S.phase == GamePhase.WaveActive;
+
+        /// <summary>Puts a free worker into an open building.</summary>
+        public bool AssignWorker(int need) => MoveWorker(need, +1);
+
+        /// <summary>Takes a worker out of a building; he becomes free.</summary>
+        public bool UnassignWorker(int need) => MoveWorker(need, -1);
+
+        /// <summary>
+        /// delta &gt; 0: a free worker goes to the building, delta &lt; 0: a worker leaves it.
+        /// One worker per call; locked buildings take no workers.
+        /// </summary>
+        public bool MoveWorker(int need, int delta)
+        {
+            if (!CanMoveWorkers) return false;
+            if (need < 0 || need >= S.buildings.Count || delta == 0) return false;
+            var b = B(need);
+            if (!b.exists || !b.unlocked) return false;
+            if (delta > 0 && FreeWorkers <= 0) return false;
+            if (delta < 0 && b.workers <= 0) return false;
+            b.workers += delta > 0 ? 1 : -1;
+            WorkersMoved?.Invoke(need);
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>
+        /// + in the middle of a wave: a free worker if there is one, otherwise the worker
+        /// is taken from the building with the most workers.
+        /// </summary>
+        public bool PullWorker(int need)
+        {
+            if (!CanMoveWorkers || need < 0 || need >= S.buildings.Count || !B(need).unlocked) return false;
+            if (FreeWorkers > 0) return MoveWorker(need, +1);
+            int donor = -1, most = 0;
+            foreach (var b in S.buildings)
+                if (b.need != need && b.workers > most) { most = b.workers; donor = b.need; }
+            if (donor < 0) return false;
+            B(donor).workers--;
+            WorkersMoved?.Invoke(donor);
+            return MoveWorker(need, +1);
+        }
+
+        /// <summary>Some worker could come to the building now (free or from another building).</summary>
+        public bool CanPullWorker(int need) =>
+            CanMoveWorkers && B(need).unlocked && (FreeWorkers > 0 || AssignedWorkers - B(need).workers > 0);
+
+        // ------------------------------------------------------------------ guest needs
+
+        /// <summary>
+        /// Guests of a wave and their needs, from the config of that wave. Only active needs are used.
+        /// Deterministic per wave, so the same wave always brings the same guests.
+        /// </summary>
+        public List<GuestPlan> GeneratePlans(int waveIndex)
+        {
+            var wc = Cfg.Wave(waveIndex);
+            var rnd = new System.Random(1000 + waveIndex * 7919);
+            var plans = new List<GuestPlan>();
+            var active = new List<int>();
+            foreach (var n in Needs.All) if (IsNeedActive((int)n)) active.Add((int)n);
+            if (active.Count == 0) return plans;
+
+            int guests = Math.Max(1, wc.guests);
+            for (int i = 0; i < guests; i++)
+            {
+                var p = new GuestPlan { time = i * wc.spacing, skin = rnd.Next(0, 6) };
+                int count = Math.Max(1, Math.Min(rnd.Next(wc.minNeeds, wc.maxNeeds + 1), active.Count));
+                var pool = new List<int>(active);
+                for (int k = 0; k < count; k++)
+                {
+                    float total = 0;
+                    foreach (var n in pool) total += Weight(wc, n);
+                    float r = (float)rnd.NextDouble() * total;
+                    int pick = pool[pool.Count - 1];
+                    foreach (var n in pool) { r -= Weight(wc, n); if (r <= 0) { pick = n; break; } }
+                    p.needs.Add(pick);
+                    pool.Remove(pick);
+                }
+                plans.Add(p);
+            }
+            return plans;
+        }
+
+        float Weight(WaveConfig wc, int need)
+        {
+            float w = wc.weights != null && need < wc.weights.Length ? wc.weights[need] : 1f;
+            return Math.Max(0.01f, w * Cfg.Need(need).weight);
+        }
+
+        static List<NeedStats> NewStats()
+        {
+            var l = new List<NeedStats>();
+            for (int i = 0; i < Needs.Count; i++) l.Add(new NeedStats());
+            return l;
+        }
+
+        // ------------------------------------------------------------------ wave
+
+        /// <summary>A wave can be started only while the resort is in AWAITING_WAVE.</summary>
+        public bool CanStartWave => S.phase == GamePhase.AwaitingWave;
+
+        /// <summary>Moves the resort from AWAITING_WAVE into an active wave. Refused in any other state.</summary>
+        public bool StartWave()
+        {
+            if (!CanStartWave) return false;
+            S.plans = GeneratePlans(S.waveIndex);
+            S.stats = NewStats();
+            foreach (var p in S.plans) foreach (var n in p.needs) S.stats[n].requested++;
+            S.guests.Clear();
+            S.nextPlan = 0;
+            S.waveTime = 0;
+            S.phase = GamePhase.WaveActive;
+            WaveStarted?.Invoke();
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>
+        /// Advances the active wave by dt seconds: guests arrive, walk to the building of their need,
+        /// queue, get served (first come, first served) and go on to their next need or leave.
+        /// </summary>
+        public void Tick(float dt)
+        {
+            if (S.phase != GamePhase.WaveActive || dt <= 0) return;
+            dt = Math.Min(dt, 0.25f);
+            S.waveTime += dt;
+
+            // arrivals
+            while (S.nextPlan < S.plans.Count && S.plans[S.nextPlan].time <= S.waveTime)
+            {
+                var p = S.plans[S.nextPlan++];
+                S.guests.Add(new Guest
+                {
+                    id = S.nextGuestId++, skin = p.skin, needs = new List<int>(p.needs),
+                    stage = GuestStage.Walking, timer = Cfg.walkTime,
+                });
+            }
+
+            // guests
+            foreach (var g in S.guests)
+            {
+                switch (g.stage)
+                {
+                    case GuestStage.Walking:
+                        g.timer -= dt;
+                        if (g.timer <= 0) { g.stage = GuestStage.Queued; g.waited = 0; }
+                        break;
+                    case GuestStage.Queued:
+                        g.waited += dt;
+                        break;
+                    case GuestStage.InService:
+                        g.progress += dt / Math.Max(0.1f, Cfg.Need(g.CurrentNeed).baseServiceTime);
+                        if (g.progress >= 1f) Serve(g);
+                        break;
+                    case GuestStage.Leaving:
+                        g.timer -= dt;
+                        if (g.timer <= 0) g.stage = GuestStage.Done;
+                        break;
+                }
+            }
+            S.guests.RemoveAll(g => g.stage == GuestStage.Done);
+
+            // queues -> free service slots, first come first served
+            foreach (var b in S.buildings)
+            {
+                if (!b.unlocked) continue;
+                int free = Math.Max(1, Cfg.serviceSlots) - InServiceCount(b.need);
+                foreach (var g in S.guests)
+                {
+                    if (free <= 0) break;
+                    if (g.stage != GuestStage.Queued || g.CurrentNeed != b.need) continue;
+                    g.stage = GuestStage.InService;
+                    g.progress = 0;
+                    free--;
+                }
+            }
+            Changed?.Invoke();
+        }
+
+        void Serve(Guest g)
+        {
+            S.stats[g.CurrentNeed].served++;
+            g.index++;
+            g.progress = 0;
+            g.waited = 0;
+            g.timer = Cfg.walkTime;
+            g.stage = g.index < g.needs.Count ? GuestStage.Walking : GuestStage.Leaving;
+        }
+    }
+}
