@@ -84,7 +84,8 @@ namespace IslandTycoon
         public void MoveWorker(int delta)
         {
             if (Selected < 0) return;
-            Model.MoveWorker(Selected, delta);
+            if (delta > 0) Model.PullWorker(Selected);
+            else Model.MoveWorker(Selected, -1);
         }
 
         void SetupCamera()
