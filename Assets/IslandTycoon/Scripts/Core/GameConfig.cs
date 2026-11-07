@@ -47,6 +47,8 @@ namespace IslandTycoon
         public Vector2 backgroundPixels = new Vector2(1672, 941);
         [Tooltip("Workers the resort starts with, spread over the open buildings")]
         public int startWorkers = 3;
+        [Tooltip("Where free workers wait, in background pixels")]
+        public Vector2 freeWorkersPixel = new Vector2(700, 655);
         public PlotConfig[] plots =
         {
             new PlotConfig { need = NeedType.Rooms,     pixel = new Vector2(460, 355),  width = 250 },

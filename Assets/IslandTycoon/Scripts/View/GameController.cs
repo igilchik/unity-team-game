@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -86,6 +87,35 @@ namespace IslandTycoon
             if (Selected < 0) return;
             if (delta > 0) Model.PullWorker(Selected);
             else Model.MoveWorker(Selected, -1);
+        }
+
+        // ------------------------------------------------------------------ feedback
+
+        /// <summary>Pop-up sprite that rises and fades (e.g. a puff when a worker moves).</summary>
+        public void Fx(string sprite, Vector3 pos, float size, float rise)
+        {
+            if (!isActiveAndEnabled) return;
+            StartCoroutine(FxRoutine(sprite, pos, size, rise));
+        }
+
+        IEnumerator FxRoutine(string sprite, Vector3 pos, float size, float rise)
+        {
+            var holder = new GameObject("Fx").transform;
+            holder.position = new Vector3(pos.x, pos.y, 0);
+            var sr = Art.MakeSprite("Sprite", holder, sprite, 9800);
+            Art.FitCenter(sr, size);
+            float t = 0, dur = 0.9f;
+            while (t < dur && sr != null)
+            {
+                t += Time.deltaTime;
+                float k = t / dur;
+                float pop = k < 0.2f ? Mathf.Lerp(0.3f, 1.15f, k / 0.2f) : Mathf.Lerp(1.15f, 1f, (k - 0.2f) / 0.2f);
+                holder.localScale = Vector3.one * pop;
+                holder.position = new Vector3(pos.x, pos.y + rise * k, 0);
+                sr.color = new Color(1, 1, 1, k < 0.6f ? 1f : 1f - (k - 0.6f) / 0.4f);
+                yield return null;
+            }
+            if (holder != null) Destroy(holder.gameObject);
         }
 
         void SetupCamera()

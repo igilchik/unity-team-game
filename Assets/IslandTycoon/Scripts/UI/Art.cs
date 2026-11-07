@@ -92,6 +92,16 @@ namespace IslandTycoon
             sr.transform.localPosition = new Vector3(-b.center.x * k, (-b.min.y) * k + yOffset, 0);
         }
 
+        /// <summary>Scales a sprite so its height is worldHeight and its feet are at local y = 0.</summary>
+        public static void FitFeet(SpriteRenderer sr, float worldHeight)
+        {
+            if (sr.sprite == null) return;
+            var b = sr.sprite.bounds;
+            float k = worldHeight / Mathf.Max(0.01f, b.size.y);
+            sr.transform.localScale = new Vector3(k, k, 1);
+            sr.transform.localPosition = new Vector3(-b.center.x * k, -b.min.y * k, 0);
+        }
+
         /// <summary>Scales a sprite to a world height, centred on the parent.</summary>
         public static void FitCenter(SpriteRenderer sr, float worldHeight)
         {

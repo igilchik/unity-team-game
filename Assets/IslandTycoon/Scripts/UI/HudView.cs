@@ -13,6 +13,7 @@ namespace IslandTycoon
     /// SCRUM-26: ... and the running wave.
     /// SCRUM-24: START WAVE button, the primary action in the bottom-right corner (thumb reach).
     /// SCRUM-25: the button is shown and active only in AWAITING_WAVE.
+    /// SCRUM-78: free workers counter (bottom left) follows every worker move.
     /// </summary>
     public class HudView : MonoBehaviour
     {
@@ -20,7 +21,7 @@ namespace IslandTycoon
 
         GameModel _m;
         RectTransform _root;
-        Text _title, _status, _coins, _energy, _value;
+        Text _title, _status, _coins, _energy, _value, _freeWorkers;
         Button _startWave;
 
         public Text TitleText => _title;
@@ -29,6 +30,7 @@ namespace IslandTycoon
         public Text EnergyText => _energy;
         public Text ValueText => _value;
         public Button StartWaveButton => _startWave;
+        public Text FreeWorkersText => _freeWorkers;
         /// <summary>Safe-area root for other HUD panels.</summary>
         public RectTransform Root => _root;
 
@@ -52,6 +54,11 @@ namespace IslandTycoon
             _energy = Pill("Energy", "UI/Icons/icon_energy", tl, new Vector2(270, -16));
             _value = Pill("ResortValue", "UI/Icons/icon_resort_value", tl, new Vector2(520, -16));
 
+            // free workers (bottom left)
+            var wp = UIFactory.WoodPill("FreeWorkers", _root, Vector2.zero, new Vector2(20, 20), new Vector2(330, 88), 80f, out var win);
+            UIFactory.Icon("Icon", wp.transform, Art.Get("Characters/Worker/worker_wave"), new Vector2(0, 0.5f), new Vector2(42, 6), 92);
+            _freeWorkers = UIFactory.FitText("Text", win, "", 28, Color.white, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one, true);
+
             // primary action (bottom right)
             _startWave = UIFactory.Button("StartWave", _root, "UI/Kit/btn_primary_orange", "START WAVE", 46,
                 new Vector2(1, 0), new Vector2(-24, 20), new Vector2(370, 0), () => { if (_m.CanStartWave) onStartWave?.Invoke(); });
@@ -74,6 +81,7 @@ namespace IslandTycoon
             UIFactory.SetText(_coins, s.coins.ToString());
             UIFactory.SetText(_energy, s.energy.ToString());
             UIFactory.SetText(_value, s.resortValue.ToString());
+            UIFactory.SetText(_freeWorkers, $"Free workers: {_m.FreeWorkers}");
 
             UIFactory.SetActive(_startWave, _m.CanStartWave);
             _startWave.interactable = _m.CanStartWave;
