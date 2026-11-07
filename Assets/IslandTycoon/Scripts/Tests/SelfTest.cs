@@ -25,6 +25,7 @@ namespace IslandTycoon
             Section("SCRUM-22 Home view data", () => HomeData(cfg));
             Section("SCRUM-23 AWAITING_WAVE", () => AwaitingWave(cfg));
             Section("SCRUM-27 Start wave", () => StartWave(cfg));
+            Section("SCRUM-40 Guest needs generation", () => NeedsGeneration(cfg));
 
             _sb.Insert(0, _fails == 0 ? "ALL CHECKS PASSED\n" : $"{_fails} CHECK(S) FAILED\n");
             return _sb.ToString();
@@ -43,11 +44,11 @@ namespace IslandTycoon
             catch (Exception e) { Check(false, $"{name} threw {e.GetType().Name}: {e.Message}"); }
         }
 
-        static void Dispose(GameObject go)
+        static void Dispose(UnityEngine.Object o)
         {
-            if (go == null) return;
-            if (Application.isPlaying) UnityEngine.Object.Destroy(go);
-            else UnityEngine.Object.DestroyImmediate(go);
+            if (o == null) return;
+            if (Application.isPlaying) UnityEngine.Object.Destroy(o);
+            else UnityEngine.Object.DestroyImmediate(o);
         }
 
         // ------------------------------------------------------------------ SCRUM-22
@@ -130,6 +131,70 @@ namespace IslandTycoon
                 Check(hud.StatusText.text.Contains("in progress"), "HUD shows the running wave");
             }
             finally { Dispose(go); }
+        }
+    
+
+        // ------------------------------------------------------------------ SCRUM-40
+
+        static void NeedsGeneration(GameConfig cfg)
+        {
+            var m = new GameModel(cfg);
+            var wc = cfg.Wave(0);
+            var plans = m.GeneratePlans(0);
+            Check(plans.Count == wc.guests, $"wave 1 brings {wc.guests} guests");
+
+            bool countsOk = true, unique = true, onlyActive = true, ordered = true;
+            int total = 0;
+            for (int i = 0; i < plans.Count; i++)
+            {
+                var p = plans[i];
+                countsOk &= p.needs.Count >= Mathf.Max(1, wc.minNeeds) && p.needs.Count <= wc.maxNeeds;
+                for (int a = 0; a < p.needs.Count; a++)
+                {
+                    onlyActive &= m.IsNeedActive(p.needs[a]);
+                    for (int b = a + 1; b < p.needs.Count; b++) unique &= p.needs[a] != p.needs[b];
+                }
+                if (i > 0) ordered &= p.time > plans[i - 1].time;
+                total += p.needs.Count;
+            }
+            Check(countsOk, "needs per guest within the wave config");
+            Check(unique, "a guest never asks twice for the same need");
+            Check(onlyActive, "only needs of open buildings are generated (no Relax / Ocean View yet)");
+            Check(ordered, "guests arrive one after another");
+
+            var again = new GameModel(cfg).GeneratePlans(0);
+            bool same = again.Count == plans.Count;
+            for (int i = 0; same && i < plans.Count; i++)
+                same = again[i].needs.Count == plans[i].needs.Count && again[i].needs[0] == plans[i].needs[0];
+            Check(same, "the same wave always brings the same guests");
+
+            m.StartWave();
+            int requested = 0;
+            foreach (var st in m.S.stats) requested += st.requested;
+            Check(m.S.plans.Count == plans.Count && requested == total, "StartWave counts every request");
+
+            // weights and the prepared needs follow the config
+            var custom = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            try
+            {
+                custom.waves = new[] { new WaveConfig { guests = 20, minNeeds = 2, maxNeeds = 2, weights = new float[] { 0, 0, 0, 1, 0 } } };
+                var mc = new GameModel(custom);
+                Check(Has(mc.GeneratePlans(0), NeedType.Relax) == false, "Relax is not asked for while the Pool is locked");
+                mc.B(NeedType.Relax).unlocked = true;
+                var withPool = mc.GeneratePlans(0);
+                Check(Has(withPool, NeedType.Relax), "Relax is asked for once the Pool is open");
+                Check(withPool[0].needs.Count == 2, "2 needs per guest when the wave says so");
+
+                custom.Need(NeedType.Drinks).enabled = false;
+                Check(!Has(mc.GeneratePlans(0), NeedType.Drinks), "a disabled need is never generated");
+            }
+            finally { Dispose(custom); }
+        }
+
+        static bool Has(System.Collections.Generic.List<GuestPlan> plans, NeedType need)
+        {
+            foreach (var p in plans) if (p.needs.Contains((int)need)) return true;
+            return false;
         }
     }
 }
