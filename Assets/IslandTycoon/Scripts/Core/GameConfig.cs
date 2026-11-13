@@ -87,6 +87,10 @@ namespace IslandTycoon
         public int startCoins = 60;
         public int startEnergy = 6;
 
+        [Header("Workers")]
+        [Tooltip("Coins paid for moving one worker (0 = moves are free)")]
+        public int workerMoveCost = 0;
+
         [Header("Guests")]
         [Tooltip("Seconds a guest walks from the boat / between buildings")]
         public float walkTime = 2f;

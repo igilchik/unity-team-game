@@ -100,7 +100,7 @@ namespace IslandTycoon
                 UIFactory.SetText(_info, $"Serves {nc.displayName}   ·   Queue {_m.QueueCount(n)}");
                 UIFactory.SetText(_workers, $"<size=22>Workers</size>\n{b.workers}");
                 UIFactory.SetText(_free, _m.CanMoveWorkers
-                    ? $"Free workers: {_m.FreeWorkers}"
+                    ? $"Free workers: {_m.FreeWorkers}\n<size=20>{(_m.MoveCost == 0 ? "moves are free" : $"move: {_m.MoveCost} coins")}</size>"
                     : "<color=#8A7F70>Move workers before the wave</color>");
                 _minus.interactable = _m.CanMoveWorkers && b.workers > 0;
                 _plus.interactable = _m.CanPullWorker(n);
