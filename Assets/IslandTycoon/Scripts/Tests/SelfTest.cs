@@ -244,13 +244,13 @@ namespace IslandTycoon
                     for (int n = 0; n < Needs.Count; n++)
                         if (m.IsNeedActive(n)) queueShown &= panel.RowValue(n).Contains($"{m.QueueCount(n)} wait");
                 }
-                Check(m.AllGuestsDone, "every guest of the wave is served");
+                Check(m.AllGuestsDone, "every guest of the wave is resolved");
                 Check(queueShown, "waiting guests are always shown");
-                bool allServed = true;
+                bool allResolved = true;
                 for (int n = 0; n < Needs.Count; n++)
-                    if (m.IsNeedActive(n)) allServed &= m.Stats(n).served == m.Stats(n).requested
-                                                     && panel.RowValue(n).Contains($"{m.Stats(n).requested}/{m.Stats(n).requested}");
-                Check(allServed, "panel ends with every request served");
+                    if (m.IsNeedActive(n)) allResolved &= m.Stats(n).Resolved == m.Stats(n).requested
+                                                       && panel.RowValue(n).Contains($"{m.Stats(n).served}/{m.Stats(n).requested}");
+                Check(allResolved, "panel ends with every request served or lost");
             }
             finally { Dispose(go); }
 

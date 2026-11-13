@@ -94,7 +94,8 @@ namespace IslandTycoon
         {
             var st = _m.Stats(need);
             string color = _m.IsBottleneck(need) ? "#C0392B" : "#2E7D32";
-            return $"<color={color}>{st.served}/{st.requested} · {_m.QueueCount(need)} wait</color>";
+            string lost = st.failed > 0 ? $" · <color=#C0392B>{st.failed} lost</color>" : "";
+            return $"<color={color}>{st.served}/{st.requested} · {_m.QueueCount(need)} wait</color>{lost}";
         }
 
         /// <summary>Shows only the needs guests can ask for now and stacks them from the top.</summary>
