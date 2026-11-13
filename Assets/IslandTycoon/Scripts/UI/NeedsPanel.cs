@@ -69,7 +69,7 @@ namespace IslandTycoon
         public void Refresh()
         {
             Arrange();
-            bool active = _m.WaveActive;
+            bool active = _m.InWave;
             UIFactory.SetText(_header, active ? $"WAVE {_m.WaveNumber} NEEDS" : "GUEST NEEDS");
             for (int n = 0; n < Needs.Count; n++)
             {
