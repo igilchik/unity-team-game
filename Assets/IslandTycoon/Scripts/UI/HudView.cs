@@ -105,7 +105,7 @@ namespace IslandTycoon
             UIFactory.SetActive(_startWave, _m.CanStartWave);
             _startWave.interactable = _m.CanStartWave;
 
-            bool wave = _m.InWave;
+            bool wave = _m.InWave || _m.WaveComplete;
             UIFactory.SetActive(_satBar, wave);
             if (wave)
             {
@@ -138,6 +138,8 @@ namespace IslandTycoon
                 case GamePhase.WaveFinishing:
                     if (_m.AllGuestsDone) return $"{_m.IC.name} · all guests served!";
                     return $"{_m.IC.name} · finishing the wave · no more guests · {_m.RemainingRequests()} requests left";
+                case GamePhase.WaveComplete:
+                    return $"{_m.IC.name} · wave {_m.WaveNumber} complete! · satisfaction {Mathf.RoundToInt(_m.S.satisfaction)}%";
                 default: return $"{_m.IC.name} · {buildings}";
             }
         }

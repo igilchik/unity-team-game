@@ -17,8 +17,9 @@ namespace IslandTycoon
     /// Resort state machine. AWAITING_WAVE: the player prepares the resort before the next wave.
     /// WAVE_ACTIVE: guests are coming and the resort serves them.
     /// WAVE_FINISHING: no more guests come, the resort serves the ones still in the queues.
+    /// WAVE_COMPLETE: every request of the wave is resolved, the queues are empty.
     /// </summary>
-    public enum GamePhase { AwaitingWave = 0, WaveActive = 1, WaveFinishing = 2 }
+    public enum GamePhase { AwaitingWave = 0, WaveActive = 1, WaveFinishing = 2, WaveComplete = 3 }
 
     [Serializable]
     public class BuildingState
