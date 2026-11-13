@@ -17,6 +17,8 @@ namespace IslandTycoon
         public event Action WaveStarted;
         /// <summary>No more new guests / requests in this wave.</summary>
         public event Action ArrivalsClosed;
+        /// <summary>The wave is over: no new guests and every queue is empty.</summary>
+        public event Action WaveEnded;
         /// <summary>Workers of a building changed (need).</summary>
         public event Action<int> WorkersMoved;
 
@@ -64,6 +66,7 @@ namespace IslandTycoon
         public bool WaveFinishing => S.phase == GamePhase.WaveFinishing;
         /// <summary>A wave is running: guests arrive (WAVE_ACTIVE) or the last ones are served (WAVE_FINISHING).</summary>
         public bool InWave => S.phase == GamePhase.WaveActive || S.phase == GamePhase.WaveFinishing;
+        public bool WaveComplete => S.phase == GamePhase.WaveComplete;
         /// <summary>1-based number of the next / current wave.</summary>
         public int WaveNumber => S.waveIndex + 1;
         public BuildingState B(int need) => S.buildings[need];
@@ -202,7 +205,7 @@ namespace IslandTycoon
         public bool ArrivalsOpen => S.arrivalsOpen;
 
         /// <summary>Everybody arrived and every request was served.</summary>
-        public bool AllGuestsDone => InWave && GuestsToCome == 0 && S.guests.Count == 0;
+        public bool AllGuestsDone => (InWave || WaveComplete) && GuestsToCome == 0 && RemainingRequests() == 0;
 
         public int OpenBuildings
         {
@@ -399,7 +402,19 @@ namespace IslandTycoon
                 }
             }
             S.satisfaction = LiveSatisfaction();
+
+            // the wave ends only when no new guests come and every queue is empty
+            if (S.phase == GamePhase.WaveFinishing && RemainingRequests() == 0) EndWave();
             Changed?.Invoke();
+        }
+
+        /// <summary>WAVE_FINISHING -> WAVE_COMPLETE: the final Wave Satisfaction is fixed.</summary>
+        void EndWave()
+        {
+            S.guests.Clear();   // the last guests walk off the island
+            S.satisfaction = WaveSatisfaction();
+            S.phase = GamePhase.WaveComplete;
+            WaveEnded?.Invoke();
         }
 
         /// <summary>
