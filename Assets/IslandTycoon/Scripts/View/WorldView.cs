@@ -74,7 +74,7 @@ namespace IslandTycoon
         public void OnPointerClick(PointerEventData e) => Controller.SelectBuilding(Need);
 
         public int Need;
-        public SpriteRenderer Body, Warning;
+        public SpriteRenderer Body, Warning, EmptyPost;
         public readonly List<Transform> Workers = new List<Transform>();
         public float Top = 2f;
     }
@@ -153,6 +153,14 @@ namespace IslandTycoon
             pv.Body = Art.MakeSprite("Body", root.transform, null, Layout.Order(Layout.PlotBase(need).y));
             pv.Warning = Art.MakeSprite("Warning", root.transform, "UI/Icons/icon_warning", 9000);
             pv.Warning.gameObject.SetActive(false);
+            // grey silhouette on the worker spot: nobody works here
+            var post = new GameObject("EmptyPost").transform;
+            post.SetParent(_content, false);
+            post.localPosition = Layout.WorkerSpot(need, 0);
+            pv.EmptyPost = Art.MakeSprite("Body", post, "Characters/Worker/worker_front", Layout.Order(Layout.PlotBase(need).y) + 4);
+            Art.FitFeet(pv.EmptyPost, WorkerHeight);
+            pv.EmptyPost.color = new Color(0.15f, 0.15f, 0.2f, 0.35f);
+            post.gameObject.SetActive(false);
             RefreshPlotArt(pv);
             return pv;
         }
@@ -193,6 +201,11 @@ namespace IslandTycoon
                 pv.Warning.transform.localScale = new Vector3(k, k, 1);
                 pv.Warning.transform.localPosition = new Vector3(0, pv.Top + 0.3f, 0);
             }
+
+            // a building left without a worker shows an empty post
+            bool unstaffed = M.IsUnstaffed(pv.Need);
+            var postGo = pv.EmptyPost.transform.parent.gameObject;
+            if (postGo.activeSelf != unstaffed) postGo.SetActive(unstaffed);
 
             // assigned workers stand in front of their building
             var b = M.B(pv.Need);

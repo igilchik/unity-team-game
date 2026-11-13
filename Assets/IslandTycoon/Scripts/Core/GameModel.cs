@@ -85,6 +85,15 @@ namespace IslandTycoon
 
         public int Workers(int need) => B(need).workers;
 
+        /// <summary>An open building with nobody working in it (e.g. after its worker was moved away).</summary>
+        public bool IsUnstaffed(int need) => B(need).exists && B(need).unlocked && B(need).workers == 0;
+
+        /// <summary>Open buildings without a worker.</summary>
+        public int UnstaffedBuildings
+        {
+            get { int n = 0; for (int i = 0; i < S.buildings.Count; i++) if (IsUnstaffed(i)) n++; return n; }
+        }
+
         /// <summary>Aggregated numbers of one need in the current wave.</summary>
         public NeedStats Stats(int need) => S.stats[need];
 
