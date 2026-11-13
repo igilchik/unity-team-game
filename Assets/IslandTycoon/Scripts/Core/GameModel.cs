@@ -221,6 +221,20 @@ namespace IslandTycoon
         /// </summary>
         public bool CanMoveWorkers => S.phase == GamePhase.AwaitingWave || InWave;
 
+        /// <summary>Coins one worker move costs. 0 by design: moving workers is free.</summary>
+        public int MoveCost => Math.Max(0, Cfg.workerMoveCost);
+
+        /// <summary>The player has the coins for one move.</summary>
+        public bool CanAffordMove => S.coins >= MoveCost;
+
+        /// <summary>Pays for one move (nothing with the default cost of 0).</summary>
+        bool PayMove()
+        {
+            if (!CanAffordMove) return false;
+            S.coins -= MoveCost;
+            return true;
+        }
+
         /// <summary>Puts a free worker into an open building.</summary>
         public bool AssignWorker(int need) => MoveWorker(need, +1);
 
@@ -239,6 +253,7 @@ namespace IslandTycoon
             if (!b.exists || !b.unlocked) return false;
             if (delta > 0 && FreeWorkers <= 0) return false;
             if (delta < 0 && b.workers <= 0) return false;
+            if (!PayMove()) return false;
             b.workers += delta > 0 ? 1 : -1;
             WorkersMoved?.Invoke(need);
             Changed?.Invoke();
@@ -256,7 +271,7 @@ namespace IslandTycoon
             int donor = -1, most = 0;
             foreach (var b in S.buildings)
                 if (b.need != need && b.workers > most) { most = b.workers; donor = b.need; }
-            if (donor < 0) return false;
+            if (donor < 0 || !CanAffordMove) return false;
             B(donor).workers--;
             WorkersMoved?.Invoke(donor);
             return MoveWorker(need, +1);
@@ -264,7 +279,7 @@ namespace IslandTycoon
 
         /// <summary>Some worker could come to the building now (free or from another building).</summary>
         public bool CanPullWorker(int need) =>
-            CanMoveWorkers && B(need).unlocked && (FreeWorkers > 0 || AssignedWorkers - B(need).workers > 0);
+            CanMoveWorkers && CanAffordMove && B(need).unlocked && (FreeWorkers > 0 || AssignedWorkers - B(need).workers > 0);
 
         // ------------------------------------------------------------------ guest needs
 
