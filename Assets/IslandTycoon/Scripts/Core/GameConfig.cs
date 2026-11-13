@@ -93,6 +93,12 @@ namespace IslandTycoon
         [Tooltip("Seconds a guest is willing to wait in a queue")]
         public float patience = 12f;
 
+        [Header("Satisfaction")]
+        [Tooltip("Served within this part of the patience = perfect score")]
+        public float fastServeFraction = 0.35f;
+        [Tooltip("Score of a request served right before the patience runs out")]
+        public float lateScore = 0.4f;
+
         [Header("Bottleneck")]
         [Tooltip("This many guests waiting at one building = bottleneck")]
         public int bottleneckQueue = 3;
