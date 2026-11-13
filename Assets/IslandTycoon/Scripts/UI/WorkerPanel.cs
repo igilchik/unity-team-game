@@ -11,6 +11,7 @@ namespace IslandTycoon
     /// SCRUM-77: ... and during the wave; + takes a worker from the busiest building if none is free.
     /// SCRUM-78: the panel refreshes after every change of the game (moves, queue during the wave).
     /// SCRUM-83: MOVE takes a worker out of this building; the next tapped building gets him.
+    /// SCRUM-84: a building left without a worker says so.
     /// </summary>
     public class WorkerPanel : MonoBehaviour
     {
@@ -112,7 +113,9 @@ namespace IslandTycoon
                 UIFactory.SetText(_title, nc.buildingName);
                 UIFactory.SetText(_info, _transferring()
                     ? "<color=#1E7B74>Tap the building that gets the worker</color>"
-                    : $"Serves {nc.displayName}   ·   Queue {_m.QueueCount(n)}");
+                    : _m.IsUnstaffed(n)
+                        ? $"<color=#C0392B>No worker here!</color>   ·   Queue {_m.QueueCount(n)}"
+                        : $"Serves {nc.displayName}   ·   Queue {_m.QueueCount(n)}");
                 UIFactory.SetText(_workers, $"<size=22>Workers</size>\n{b.workers}");
                 UIFactory.SetText(_free, _m.CanMoveWorkers
                     ? $"Free workers: {_m.FreeWorkers}\n<size=20>{(_m.MoveCost == 0 ? "moves are free" : $"move: {_m.MoveCost} coins")}</size>"
