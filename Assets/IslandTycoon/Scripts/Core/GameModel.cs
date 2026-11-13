@@ -161,6 +161,40 @@ namespace IslandTycoon
         /// <summary>Guests of the wave that have not arrived yet (0 once the arrivals are closed).</summary>
         public int GuestsToCome => S.arrivalsOpen ? S.plans.Count - S.nextPlan : 0;
 
+        /// <summary>
+        /// Requests of one need still waiting to be resolved in this wave: guests on the way,
+        /// in the queue or in service, their later needs, and guests that have not arrived yet.
+        /// </summary>
+        public int RemainingRequests(int need)
+        {
+            int n = 0;
+            foreach (var g in S.guests)
+            {
+                if (g.stage == GuestStage.Leaving || g.stage == GuestStage.Done) continue;
+                for (int k = g.index; k < g.needs.Count; k++) if (g.needs[k] == need) n++;
+            }
+            if (S.arrivalsOpen)
+                for (int i = S.nextPlan; i < S.plans.Count; i++)
+                    foreach (var x in S.plans[i].needs) if (x == need) n++;
+            return n;
+        }
+
+        /// <summary>All requests of the wave still waiting to be resolved.</summary>
+        public int RemainingRequests()
+        {
+            int n = 0;
+            for (int i = 0; i < Needs.Count; i++) n += RemainingRequests(i);
+            return n;
+        }
+
+        /// <summary>Requests standing in the queues right now (not yet in service).</summary>
+        public int QueuedRequests()
+        {
+            int n = 0;
+            for (int i = 0; i < Needs.Count; i++) n += QueueCount(i);
+            return n;
+        }
+
         /// <summary>New guests can still arrive in this wave.</summary>
         public bool ArrivalsOpen => S.arrivalsOpen;
 
