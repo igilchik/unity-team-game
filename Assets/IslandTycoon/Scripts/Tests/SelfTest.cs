@@ -29,6 +29,7 @@ namespace IslandTycoon
             Section("SCRUM-47 Wave Needs Panel during a wave", () => NeedsPanelDuringWave(cfg));
             Section("SCRUM-79 Moving workers between buildings", () => WorkerMoves(cfg));
             Section("SCRUM-53 Satisfaction and bottlenecks", () => SatisfactionBottleneck(cfg));
+            Section("SCRUM-59 Wave end with a backlog", () => WaveEndBacklog());
 
             _sb.Insert(0, _fails == 0 ? "ALL CHECKS PASSED\n" : $"{_fails} CHECK(S) FAILED\n");
             return _sb.ToString();
@@ -380,6 +381,66 @@ namespace IslandTycoon
                 Check(hud.SatisfactionFace.sprite == Art.Get(Art.FaceIcon(mr.S.satisfaction)), "smiley follows the satisfaction");
             }
             finally { Dispose(go); Dispose(calm); Dispose(rush); }
+        }
+    
+
+        // ------------------------------------------------------------------ SCRUM-59
+
+        static void WaveEndBacklog()
+        {
+            var rush = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            var timed = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            var go = new GameObject("SelfTest_WaveEnd");
+            try
+            {
+                // 8 guests reach the Hotel at once: a long backlog after the last arrival
+                rush.waves = new[] { new WaveConfig { guests = 8, spacing = 0.1f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+                var m = new GameModel(rush);
+                var hud = go.AddComponent<HudView>();
+                hud.Build(m);
+                int closed = 0, ended = 0;
+                m.ArrivalsClosed += () => closed++;
+                m.WaveEnded += () => ended++;
+                m.StartWave();
+                Check(m.ArrivalsOpen && m.Phase == GamePhase.WaveActive, "arrivals open at the start");
+                for (int i = 0; i < 30; i++) m.Tick(0.1f);
+                Check(!m.ArrivalsOpen && closed == 1 && m.GuestsToCome == 0, "arrivals close after the last guest");
+                Check(m.Phase == GamePhase.WaveFinishing, "WAVE_ACTIVE -> WAVE_FINISHING");
+                Check(m.QueuedRequests() > 0 && m.RemainingRequests() > 0, "requests are still waiting in the queue");
+                Check(!m.StartWave(), "no new wave while the last guests are served");
+                Check(hud.StatusText.text.Contains("finishing") && hud.StatusText.text.Contains($"{m.RemainingRequests()} requests left"),
+                    "HUD shows the remaining requests");
+
+                bool neverEarly = true;
+                int guard = 0;
+                while (!m.WaveComplete && guard++ < 5000)
+                {
+                    neverEarly &= m.RemainingRequests() > 0 || m.QueuedRequests() == 0;
+                    m.Tick(0.1f);
+                    if (m.WaveComplete) break;
+                    neverEarly &= m.RemainingRequests() > 0;   // still running = something is left
+                }
+                Check(neverEarly, "the wave never ends while requests are left");
+                Check(m.WaveComplete && ended == 1, "the wave ends once the queues are empty");
+                var st = m.Stats((int)NeedType.Rooms);
+                Check(st.Resolved == st.requested && st.requested == 8, "every request served or lost");
+                Check(Mathf.Abs(m.S.satisfaction - m.WaveSatisfaction()) < 0.001f, "final satisfaction is fixed at the end");
+                float t = m.S.waveTime;
+                m.Tick(1f);
+                Check(m.S.waveTime == t && ended == 1, "nothing runs after the wave ended");
+                Check(hud.StatusText.text.Contains("complete"), "HUD shows the completed wave");
+
+                // arrivals can also stop after a time limit: guests that did not come are dropped
+                timed.waves = new[] { new WaveConfig { guests = 10, spacing = 1f, duration = 4.5f } };
+                var mt = new GameModel(timed);
+                mt.StartWave();
+                for (int i = 0; i < 50; i++) mt.Tick(0.1f);
+                int requested = 0;
+                foreach (var s in mt.S.stats) requested += s.requested;
+                Check(!mt.ArrivalsOpen && mt.S.plans.Count == 5, "arrivals stop after the wave duration (5 of 10 guests came)");
+                Check(requested == 5, "requests of guests that did not come are dropped");
+            }
+            finally { Dispose(go); Dispose(rush); Dispose(timed); }
         }
     }
 }
