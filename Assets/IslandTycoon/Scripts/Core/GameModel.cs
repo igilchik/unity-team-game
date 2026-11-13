@@ -113,6 +113,29 @@ namespace IslandTycoon
             S.phase == GamePhase.WaveActive && IsNeedActive(need) &&
             (QueueCount(need) >= Cfg.bottleneckQueue || LongestWaitFraction(need) > Cfg.bottleneckWaitFraction);
 
+        // ------------------------------------------------------------------ satisfaction
+
+        /// <summary>
+        /// Score of one request served after waiting <paramref name="waited"/> seconds in the queue:
+        /// 1 when served fast, falling to lateScore when the guest almost ran out of patience.
+        /// </summary>
+        public float RequestScore(float waited)
+        {
+            float pat = Math.Max(0.1f, Cfg.patience);
+            float fast = pat * Cfg.fastServeFraction;
+            if (waited <= fast) return 1f;
+            float t = Math.Min(1f, (waited - fast) / Math.Max(0.01f, pat - fast));
+            return 1f + (Cfg.lateScore - 1f) * t;
+        }
+
+        /// <summary>Wave Satisfaction 0..100: average score of the requests resolved so far (100 when none yet).</summary>
+        public float WaveSatisfaction()
+        {
+            float score = 0; int resolved = 0;
+            foreach (var st in S.stats) { score += st.score; resolved += st.served; }
+            return resolved == 0 ? 100f : 100f * score / resolved;
+        }
+
         /// <summary>Guests of the wave that have not arrived yet.</summary>
         public int GuestsToCome => S.plans.Count - S.nextPlan;
 
@@ -312,7 +335,9 @@ namespace IslandTycoon
 
         void Serve(Guest g)
         {
-            S.stats[g.CurrentNeed].served++;
+            var st = S.stats[g.CurrentNeed];
+            st.served++;
+            st.score += RequestScore(g.waited);
             g.index++;
             g.progress = 0;
             g.waited = 0;

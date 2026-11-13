@@ -61,6 +61,7 @@ namespace IslandTycoon
     {
         public int requested;   // requests for this need in the wave
         public int served;      // requests already served
+        public float score;     // sum of the satisfaction scores of served requests (0..1 each)
         public int Remaining => requested - served;
     }
 
