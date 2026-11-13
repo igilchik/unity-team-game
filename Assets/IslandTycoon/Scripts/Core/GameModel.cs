@@ -128,11 +128,14 @@ namespace IslandTycoon
             return 1f + (Cfg.lateScore - 1f) * t;
         }
 
-        /// <summary>Wave Satisfaction 0..100: average score of the requests resolved so far (100 when none yet).</summary>
+        /// <summary>
+        /// Wave Satisfaction 0..100: average score of the requests resolved so far (100 when none yet).
+        /// Served requests count with their score, failed ones (guest lost patience) with 0.
+        /// </summary>
         public float WaveSatisfaction()
         {
             float score = 0; int resolved = 0;
-            foreach (var st in S.stats) { score += st.score; resolved += st.served; }
+            foreach (var st in S.stats) { score += st.score; resolved += st.Resolved; }
             return resolved == 0 ? 100f : 100f * score / resolved;
         }
 
@@ -143,7 +146,7 @@ namespace IslandTycoon
         public float LiveSatisfaction()
         {
             float score = 0; int count = 0;
-            foreach (var st in S.stats) { score += st.score; count += st.served; }
+            foreach (var st in S.stats) { score += st.score; count += st.Resolved; }
             foreach (var g in S.guests)
             {
                 if (g.stage != GuestStage.Queued && g.stage != GuestStage.InService) continue;
@@ -321,6 +324,7 @@ namespace IslandTycoon
                         break;
                     case GuestStage.Queued:
                         g.waited += dt;
+                        if (g.waited > Cfg.patience) Fail(g);
                         break;
                     case GuestStage.InService:
                         g.progress += dt / Math.Max(0.1f, Cfg.Need(g.CurrentNeed).baseServiceTime);
@@ -362,6 +366,20 @@ namespace IslandTycoon
             g.waited = 0;
             g.timer = Cfg.walkTime;
             g.stage = g.index < g.needs.Count ? GuestStage.Walking : GuestStage.Leaving;
+        }
+
+        /// <summary>
+        /// The guest waited longer than the patience: the request fails (score 0) and the guest
+        /// gives up the remaining needs as well and leaves the resort.
+        /// </summary>
+        void Fail(Guest g)
+        {
+            S.stats[g.CurrentNeed].failed++;
+            for (int k = g.index + 1; k < g.needs.Count; k++) S.stats[g.needs[k]].failed++;
+            g.index = g.needs.Count;
+            g.progress = 0;
+            g.timer = Cfg.walkTime;
+            g.stage = GuestStage.Leaving;
         }
     }
 }
