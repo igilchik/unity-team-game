@@ -14,6 +14,7 @@ namespace IslandTycoon
     /// SCRUM-24: START WAVE button, the primary action in the bottom-right corner (thumb reach).
     /// SCRUM-25: the button is shown and active only in AWAITING_WAVE.
     /// SCRUM-78: free workers counter (bottom left) follows every worker move.
+    /// SCRUM-52: Wave Satisfaction bar with a smiley under the plaque during the wave.
     /// </summary>
     public class HudView : MonoBehaviour
     {
@@ -23,6 +24,10 @@ namespace IslandTycoon
         RectTransform _root;
         Text _title, _status, _coins, _energy, _value, _freeWorkers;
         Button _startWave;
+        RectTransform _satBar, _satFill;
+        Image _satFace;
+        Text _satText;
+        const float SatWidth = 430, SatHeight = 72;
 
         public Text TitleText => _title;
         public Text StatusText => _status;
@@ -31,6 +36,9 @@ namespace IslandTycoon
         public Text ValueText => _value;
         public Button StartWaveButton => _startWave;
         public Text FreeWorkersText => _freeWorkers;
+        public RectTransform SatisfactionBar => _satBar;
+        public Text SatisfactionText => _satText;
+        public Image SatisfactionFace => _satFace;
         /// <summary>Safe-area root for other HUD panels.</summary>
         public RectTransform Root => _root;
 
@@ -47,6 +55,17 @@ namespace IslandTycoon
             UIFactory.WoodPill("StatePlaque", _root, Top, new Vector2(170, -10), new Vector2(620, 118), 80f, out var pin);
             _title = UIFactory.FitText("Title", pin, "", 40, Color.white, TextAnchor.MiddleCenter, new Vector2(0, 0.42f), new Vector2(1, 1), true);
             _status = UIFactory.FitText("Status", pin, "", 22, UIFactory.Cream, TextAnchor.MiddleCenter, new Vector2(0, 0), new Vector2(1, 0.46f));
+
+            // Wave Satisfaction bar (under the plaque, only during the wave)
+            _satBar = UIFactory.Centered("Satisfaction", _root, Top, new Vector2(150, -166), new Vector2(SatWidth, SatHeight));
+            var empty = UIFactory.Image("Empty", _satBar, Art.Get("UI/Kit/bar_empty"), new Vector2(0, 0.5f), Vector2.zero, new Vector2(SatWidth, SatHeight));
+            empty.preserveAspect = false;
+            _satFill = UIFactory.Rect("FillMask", _satBar, new Vector2(0, 0.5f), Vector2.zero, new Vector2(SatWidth, SatHeight));
+            _satFill.gameObject.AddComponent<RectMask2D>();
+            var full = UIFactory.Image("Full", _satFill, Art.Get("UI/Kit/bar_full"), new Vector2(0, 0.5f), Vector2.zero, new Vector2(SatWidth, SatHeight));
+            full.preserveAspect = false;
+            _satFace = UIFactory.Icon("Face", _satBar, Art.Get("UI/Icons/icon_face_happy"), new Vector2(1, 0.5f), new Vector2(34, 0), 76);
+            _satText = UIFactory.FitText("Pct", _satBar, "100%", 26, Color.white, TextAnchor.MiddleCenter, new Vector2(0.22f, 0.2f), new Vector2(0.95f, 0.85f), true);
 
             // currencies (top left)
             var tl = new Vector2(0, 1);
@@ -85,6 +104,16 @@ namespace IslandTycoon
 
             UIFactory.SetActive(_startWave, _m.CanStartWave);
             _startWave.interactable = _m.CanStartWave;
+
+            bool wave = _m.WaveActive;
+            UIFactory.SetActive(_satBar, wave);
+            if (wave)
+            {
+                float sat = s.satisfaction;
+                _satFill.sizeDelta = new Vector2(SatWidth * Mathf.Clamp01(sat / 100f), SatHeight);
+                UIFactory.SetText(_satText, $"Satisfaction {Mathf.RoundToInt(sat)}%");
+                UIFactory.SetSprite(_satFace, Art.Get(Art.FaceIcon(sat)));
+            }
         }
 
         /// <summary>Wooden pill with an icon on the left and a number inside.</summary>
