@@ -134,7 +134,7 @@ namespace IslandTycoon
                 case GamePhase.WaveActive:
                     int t = (int)_m.S.waveTime;
                     if (_m.AllGuestsDone) return $"{_m.IC.name} · all guests served!";
-                    string guests = _m.ArrivalsOpen ? $"{_m.GuestsToCome} guests arriving" : $"no more guests · last guests: {_m.S.guests.Count}";
+                    string guests = _m.ArrivalsOpen ? $"{_m.GuestsToCome} guests arriving" : $"no more guests · {_m.RemainingRequests()} requests left";
                     return $"{_m.IC.name} · wave in progress {t / 60}:{t % 60:00} · {guests}";
                 default: return $"{_m.IC.name} · {buildings}";
             }
