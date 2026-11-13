@@ -15,6 +15,8 @@ namespace IslandTycoon
         /// <summary>Raised after every change of the game state; the UI refreshes from it.</summary>
         public event Action Changed;
         public event Action WaveStarted;
+        /// <summary>No more new guests / requests in this wave.</summary>
+        public event Action ArrivalsClosed;
         /// <summary>Workers of a building changed (need).</summary>
         public event Action<int> WorkersMoved;
 
@@ -156,8 +158,11 @@ namespace IslandTycoon
             return count == 0 ? 100f : 100f * score / count;
         }
 
-        /// <summary>Guests of the wave that have not arrived yet.</summary>
-        public int GuestsToCome => S.plans.Count - S.nextPlan;
+        /// <summary>Guests of the wave that have not arrived yet (0 once the arrivals are closed).</summary>
+        public int GuestsToCome => S.arrivalsOpen ? S.plans.Count - S.nextPlan : 0;
+
+        /// <summary>New guests can still arrive in this wave.</summary>
+        public bool ArrivalsOpen => S.arrivalsOpen;
 
         /// <summary>Everybody arrived and every request was served.</summary>
         public bool AllGuestsDone => S.phase == GamePhase.WaveActive && GuestsToCome == 0 && S.guests.Count == 0;
@@ -284,6 +289,7 @@ namespace IslandTycoon
             foreach (var p in S.plans) foreach (var n in p.needs) S.stats[n].requested++;
             S.guests.Clear();
             S.nextPlan = 0;
+            S.arrivalsOpen = true;
             S.waveTime = 0;
             S.satisfaction = 100f;
             S.phase = GamePhase.WaveActive;
@@ -303,7 +309,7 @@ namespace IslandTycoon
             S.waveTime += dt;
 
             // arrivals
-            while (S.nextPlan < S.plans.Count && S.plans[S.nextPlan].time <= S.waveTime)
+            while (S.arrivalsOpen && S.nextPlan < S.plans.Count && S.plans[S.nextPlan].time <= S.waveTime)
             {
                 var p = S.plans[S.nextPlan++];
                 S.guests.Add(new Guest
@@ -312,6 +318,9 @@ namespace IslandTycoon
                     stage = GuestStage.Walking, timer = Cfg.walkTime,
                 });
             }
+            float duration = Cfg.Wave(S.waveIndex).duration;
+            if (S.arrivalsOpen && (S.nextPlan >= S.plans.Count || (duration > 0 && S.waveTime >= duration)))
+                CloseArrivals();
 
             // guests
             foreach (var g in S.guests)
@@ -353,6 +362,21 @@ namespace IslandTycoon
                 }
             }
             S.satisfaction = LiveSatisfaction();
+            Changed?.Invoke();
+        }
+
+        /// <summary>
+        /// Stops new requests: no more guests arrive in this wave. Guests that have not arrived yet
+        /// are dropped together with their requests; guests already in the resort are still served.
+        /// </summary>
+        public void CloseArrivals()
+        {
+            if (!S.arrivalsOpen) return;
+            for (int i = S.nextPlan; i < S.plans.Count; i++)
+                foreach (var n in S.plans[i].needs) S.stats[n].requested--;
+            if (S.nextPlan < S.plans.Count) S.plans.RemoveRange(S.nextPlan, S.plans.Count - S.nextPlan);
+            S.arrivalsOpen = false;
+            ArrivalsClosed?.Invoke();
             Changed?.Invoke();
         }
 

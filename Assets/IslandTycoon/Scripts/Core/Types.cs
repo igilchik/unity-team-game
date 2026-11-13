@@ -85,6 +85,7 @@ namespace IslandTycoon
         public float satisfaction = 100f;   // live Wave Satisfaction 0..100
         public List<GuestPlan> plans = new List<GuestPlan>();
         public int nextPlan;         // next guest to arrive
+        public bool arrivalsOpen;    // new guests (and their requests) can still come
         public List<Guest> guests = new List<Guest>();
         public int nextGuestId;
         public List<NeedStats> stats = new List<NeedStats>();
