@@ -66,6 +66,8 @@ namespace IslandTycoon
         public int guests = 5;
         [Tooltip("Seconds between guest arrivals")]
         public float spacing = 3f;
+        [Tooltip("Arrivals stop after this many seconds (0 = when the last planned guest arrives)")]
+        public float duration;
         [Tooltip("Needs per guest (each guest asks for different needs)")]
         public int minNeeds = 1;
         public int maxNeeds = 1;
