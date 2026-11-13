@@ -29,6 +29,8 @@ namespace IslandTycoon
         public CameraRig Rig { get; private set; }
         /// <summary>Building whose worker panel is open, -1 = none.</summary>
         public int Selected { get; private set; } = -1;
+        /// <summary>Building a worker is being taken from (MOVE pressed), -1 = none.</summary>
+        public int TransferFrom { get; private set; } = -1;
 
         /// <summary>The game waits while the main menu covers it.</summary>
         public bool Paused => MainMenu.Instance != null && MainMenu.Instance.IsOpen;
@@ -59,7 +61,8 @@ namespace IslandTycoon
             _needs.Build(Model, _hud.Root);
 
             _workers = _hud.gameObject.AddComponent<WorkerPanel>();
-            _workers.Build(Model, _hud.Root, () => Selected, MoveWorker, () => SelectBuilding(-1));
+            _workers.Build(Model, _hud.Root, () => Selected, MoveWorker, () => SelectBuilding(-1),
+                StartTransfer, () => TransferFrom >= 0);
 
             MainMenu.PlayPressed += OnPlay;
         }
@@ -74,11 +77,28 @@ namespace IslandTycoon
         /// <summary>START WAVE button.</summary>
         public void StartWave() => Model.StartWave();
 
-        /// <summary>Tap on a building (again = close), -1 closes the worker panel.</summary>
+        /// <summary>
+        /// Tap on a building (again = close), -1 closes the worker panel.
+        /// After MOVE the tapped building gets the worker of the original one, instantly.
+        /// </summary>
         public void SelectBuilding(int need)
         {
             if (Paused) return;
+            if (TransferFrom >= 0)
+            {
+                int from = TransferFrom;
+                TransferFrom = -1;
+                if (need >= 0 && need != from && Model.TransferWorker(from, need)) Selected = need;
+                return;   // any other tap cancels the move
+            }
             Selected = need < 0 || Selected == need ? -1 : need;
+        }
+
+        /// <summary>MOVE in the worker panel: take a worker out of the selected building.</summary>
+        public void StartTransfer()
+        {
+            if (Selected < 0 || !Model.CanMoveWorkers || Model.Workers(Selected) <= 0) return;
+            TransferFrom = Selected;
         }
 
         /// <summary>- / + in the worker panel for the selected building.</summary>
