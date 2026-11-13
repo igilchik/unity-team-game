@@ -136,6 +136,23 @@ namespace IslandTycoon
             return resolved == 0 ? 100f : 100f * score / resolved;
         }
 
+        /// <summary>
+        /// Live Wave Satisfaction 0..100 during the wave: served requests plus the guests waiting
+        /// right now, scored by how long they have waited so far. It drops while queues grow.
+        /// </summary>
+        public float LiveSatisfaction()
+        {
+            float score = 0; int count = 0;
+            foreach (var st in S.stats) { score += st.score; count += st.served; }
+            foreach (var g in S.guests)
+            {
+                if (g.stage != GuestStage.Queued && g.stage != GuestStage.InService) continue;
+                score += RequestScore(g.waited);
+                count++;
+            }
+            return count == 0 ? 100f : 100f * score / count;
+        }
+
         /// <summary>Guests of the wave that have not arrived yet.</summary>
         public int GuestsToCome => S.plans.Count - S.nextPlan;
 
@@ -265,6 +282,7 @@ namespace IslandTycoon
             S.guests.Clear();
             S.nextPlan = 0;
             S.waveTime = 0;
+            S.satisfaction = 100f;
             S.phase = GamePhase.WaveActive;
             WaveStarted?.Invoke();
             Changed?.Invoke();
@@ -330,6 +348,7 @@ namespace IslandTycoon
                     free--;
                 }
             }
+            S.satisfaction = LiveSatisfaction();
             Changed?.Invoke();
         }
 
