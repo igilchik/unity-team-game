@@ -271,10 +271,31 @@ namespace IslandTycoon
             int donor = -1, most = 0;
             foreach (var b in S.buildings)
                 if (b.need != need && b.workers > most) { most = b.workers; donor = b.need; }
-            if (donor < 0 || !CanAffordMove) return false;
-            B(donor).workers--;
-            WorkersMoved?.Invoke(donor);
-            return MoveWorker(need, +1);
+            return donor >= 0 && TransferWorker(donor, need);
+        }
+
+        /// <summary>
+        /// Moves one worker straight from one building to another, instantly: no walking time,
+        /// the new building has the worker in the same moment. Allowed before and during a wave.
+        /// </summary>
+        public bool TransferWorker(int from, int to)
+        {
+            if (!CanTransfer(from, to) || !PayMove()) return false;
+            B(from).workers--;
+            B(to).workers++;
+            WorkersMoved?.Invoke(from);
+            WorkersMoved?.Invoke(to);
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>A worker of building <paramref name="from"/> can go to building <paramref name="to"/> now.</summary>
+        public bool CanTransfer(int from, int to)
+        {
+            if (!CanMoveWorkers || !CanAffordMove || from == to) return false;
+            if (from < 0 || to < 0 || from >= S.buildings.Count || to >= S.buildings.Count) return false;
+            var a = B(from); var b = B(to);
+            return a.exists && b.exists && b.unlocked && a.workers > 0;
         }
 
         /// <summary>Some worker could come to the building now (free or from another building).</summary>
