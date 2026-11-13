@@ -28,6 +28,7 @@ namespace IslandTycoon
             Section("SCRUM-40 Guest needs generation", () => NeedsGeneration(cfg));
             Section("SCRUM-47 Wave Needs Panel during a wave", () => NeedsPanelDuringWave(cfg));
             Section("SCRUM-79 Moving workers between buildings", () => WorkerMoves(cfg));
+            Section("SCRUM-53 Satisfaction and bottlenecks", () => SatisfactionBottleneck(cfg));
 
             _sb.Insert(0, _fails == 0 ? "ALL CHECKS PASSED\n" : $"{_fails} CHECK(S) FAILED\n");
             return _sb.ToString();
@@ -334,6 +335,51 @@ namespace IslandTycoon
                 Check(!panel.Panel.gameObject.activeSelf, "panel closes when nothing is selected");
             }
             finally { Dispose(go); }
+        }
+    
+
+        // ------------------------------------------------------------------ SCRUM-53
+
+        static void SatisfactionBottleneck(GameConfig cfg)
+        {
+            var m0 = new GameModel(cfg);
+            Check(Mathf.Approximately(m0.RequestScore(0), 1f), "fast service = full score");
+            Check(Mathf.Abs(m0.RequestScore(cfg.patience) - cfg.lateScore) < 0.001f, "late service = lateScore");
+            Check(m0.RequestScore(cfg.patience * 0.8f) < 1f && m0.RequestScore(cfg.patience * 0.8f) > cfg.lateScore,
+                "score falls the longer a guest waits");
+
+            // calm wave: one guest at a time, nobody waits
+            var calm = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            var rush = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            var go = new GameObject("SelfTest_Satisfaction");
+            try
+            {
+                calm.waves = new[] { new WaveConfig { guests = 3, spacing = 20f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+                var mc = new GameModel(calm);
+                mc.StartWave();
+                for (int i = 0; i < 900; i++) mc.Tick(0.1f);
+                Check(!mc.IsBottleneck((int)NeedType.Rooms), "no bottleneck in a calm wave");
+                Check(mc.S.satisfaction >= 99.9f && mc.WaveSatisfaction() >= 99.9f, "no waiting = 100 % satisfaction");
+
+                // rush wave: 8 guests at the Hotel at once
+                rush.waves = new[] { new WaveConfig { guests = 8, spacing = 0.1f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+                var mr = new GameModel(rush);
+                var hud = go.AddComponent<HudView>();
+                hud.Build(mr);
+                mr.StartWave();
+                Check(hud.SatisfactionBar.gameObject.activeSelf && hud.SatisfactionText.text.Contains("100%"), "bar shows 100 % at the start");
+                for (int i = 0; i < 30; i++) mr.Tick(0.1f);
+                Check(mr.IsBottleneck((int)NeedType.Rooms), "rush creates a bottleneck");
+                float atBottleneck = mr.S.satisfaction;
+                for (int i = 0; i < 60; i++) mr.Tick(0.1f);
+                Check(mr.S.satisfaction < atBottleneck && mr.S.satisfaction < 100f, "satisfaction falls while the queue waits");
+                for (int i = 0; i < 1200; i++) mr.Tick(0.1f);
+                Check(mr.Stats((int)NeedType.Rooms).failed > 0, "guests that wait too long are lost");
+                Check(mr.WaveSatisfaction() < 50f, "a long bottleneck ruins the satisfaction");
+                Check(hud.SatisfactionText.text.Contains($"{Mathf.RoundToInt(mr.S.satisfaction)}%"), "bar follows the satisfaction");
+                Check(hud.SatisfactionFace.sprite == Art.Get(Art.FaceIcon(mr.S.satisfaction)), "smiley follows the satisfaction");
+            }
+            finally { Dispose(go); Dispose(calm); Dispose(rush); }
         }
     }
 }
