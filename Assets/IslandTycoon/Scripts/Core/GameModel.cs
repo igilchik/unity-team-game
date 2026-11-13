@@ -61,6 +61,9 @@ namespace IslandTycoon
         public GamePhase Phase => S.phase;
         public bool AwaitingWave => S.phase == GamePhase.AwaitingWave;
         public bool WaveActive => S.phase == GamePhase.WaveActive;
+        public bool WaveFinishing => S.phase == GamePhase.WaveFinishing;
+        /// <summary>A wave is running: guests arrive (WAVE_ACTIVE) or the last ones are served (WAVE_FINISHING).</summary>
+        public bool InWave => S.phase == GamePhase.WaveActive || S.phase == GamePhase.WaveFinishing;
         /// <summary>1-based number of the next / current wave.</summary>
         public int WaveNumber => S.waveIndex + 1;
         public BuildingState B(int need) => S.buildings[need];
@@ -112,7 +115,7 @@ namespace IslandTycoon
         /// has been waiting too long. The player should send a worker there.
         /// </summary>
         public bool IsBottleneck(int need) =>
-            S.phase == GamePhase.WaveActive && IsNeedActive(need) &&
+            InWave && IsNeedActive(need) &&
             (QueueCount(need) >= Cfg.bottleneckQueue || LongestWaitFraction(need) > Cfg.bottleneckWaitFraction);
 
         // ------------------------------------------------------------------ satisfaction
@@ -199,7 +202,7 @@ namespace IslandTycoon
         public bool ArrivalsOpen => S.arrivalsOpen;
 
         /// <summary>Everybody arrived and every request was served.</summary>
-        public bool AllGuestsDone => S.phase == GamePhase.WaveActive && GuestsToCome == 0 && S.guests.Count == 0;
+        public bool AllGuestsDone => InWave && GuestsToCome == 0 && S.guests.Count == 0;
 
         public int OpenBuildings
         {
@@ -213,7 +216,7 @@ namespace IslandTycoon
         /// Workers can be moved while the player prepares the resort (AWAITING_WAVE)
         /// and also during an active wave, to react to bottlenecks. Moves are instant and free.
         /// </summary>
-        public bool CanMoveWorkers => S.phase == GamePhase.AwaitingWave || S.phase == GamePhase.WaveActive;
+        public bool CanMoveWorkers => S.phase == GamePhase.AwaitingWave || InWave;
 
         /// <summary>Puts a free worker into an open building.</summary>
         public bool AssignWorker(int need) => MoveWorker(need, +1);
@@ -338,7 +341,7 @@ namespace IslandTycoon
         /// </summary>
         public void Tick(float dt)
         {
-            if (S.phase != GamePhase.WaveActive || dt <= 0) return;
+            if (!InWave || dt <= 0) return;
             dt = Math.Min(dt, 0.25f);
             S.waveTime += dt;
 
@@ -410,6 +413,8 @@ namespace IslandTycoon
                 foreach (var n in S.plans[i].needs) S.stats[n].requested--;
             if (S.nextPlan < S.plans.Count) S.plans.RemoveRange(S.nextPlan, S.plans.Count - S.nextPlan);
             S.arrivalsOpen = false;
+            // the wave goes on until the guests already in the resort are served
+            if (S.phase == GamePhase.WaveActive) S.phase = GamePhase.WaveFinishing;
             ArrivalsClosed?.Invoke();
             Changed?.Invoke();
         }
