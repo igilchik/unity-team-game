@@ -21,6 +21,8 @@ namespace IslandTycoon
         public float baseServiceTime = 4f;
         [Tooltip("How often guests ask for this need compared to the others")]
         public float weight = 1f;
+        [Tooltip("Coins earned for one served request")]
+        public int coinsPerServe = 5;
     }
 
     [Serializable]
@@ -119,6 +121,17 @@ namespace IslandTycoon
         public int star2 = 70;
         public int star3 = 90;
 
+        [Header("Wave rewards")]
+        [Tooltip("Bonus coins per satisfaction point at the end of a wave")]
+        public float satisfactionCoinBonus = 0.2f;
+        [Tooltip("The bonus grows with every wave by this part")]
+        public float bonusGrowthPerWave = 0.25f;
+        [Tooltip("Energy earned per star")]
+        public int energyPerStar = 1;
+        [Tooltip("Resort Value per served request and per star")]
+        public int valuePerServe = 2;
+        public int valuePerStar = 10;
+
         [Header("Bottleneck")]
         [Tooltip("This many guests waiting at one building = bottleneck")]
         public int bottleneckQueue = 3;
@@ -129,15 +142,15 @@ namespace IslandTycoon
         public NeedConfig[] needs =
         {
             new NeedConfig { need = NeedType.Rooms,     buildingName = "Guest Hotel", spriteKey = "rooms",
-                             enabled = true, displayName = "Rooms", icon = "UI/Icons/icon_need_rooms", baseServiceTime = 8.0f },
+                             enabled = true, displayName = "Rooms", icon = "UI/Icons/icon_need_rooms", baseServiceTime = 8.0f, coinsPerServe = 6 },
             new NeedConfig { need = NeedType.Drinks,    buildingName = "Tiki Bar",    spriteKey = "bar",
-                             enabled = true, displayName = "Drinks", icon = "UI/Icons/icon_need_drinks", baseServiceTime = 4.8f },
+                             enabled = true, displayName = "Drinks", icon = "UI/Icons/icon_need_drinks", baseServiceTime = 4.8f, coinsPerServe = 4 },
             new NeedConfig { need = NeedType.Food,      buildingName = "Restaurant",  spriteKey = "food",
-                             enabled = true, displayName = "Food", icon = "UI/Icons/icon_need_food", baseServiceTime = 7.2f },
+                             enabled = true, displayName = "Food", icon = "UI/Icons/icon_need_food", baseServiceTime = 7.2f, coinsPerServe = 5 },
             new NeedConfig { need = NeedType.Relax,     buildingName = "Pool",        spriteKey = "pool",
-                             enabled = true, displayName = "Relax", icon = "UI/Icons/icon_need_relax", baseServiceTime = 8.0f },
+                             enabled = true, displayName = "Relax", icon = "UI/Icons/icon_need_relax", baseServiceTime = 8.0f, coinsPerServe = 7 },
             new NeedConfig { need = NeedType.OceanView, buildingName = "Bungalows",   spriteKey = "bungalows",
-                             enabled = true, displayName = "Ocean View", icon = "UI/Icons/icon_need_oceanview", baseServiceTime = 9.6f },
+                             enabled = true, displayName = "Ocean View", icon = "UI/Icons/icon_need_oceanview", baseServiceTime = 9.6f, coinsPerServe = 10 },
         };
 
         [Header("Island")]
