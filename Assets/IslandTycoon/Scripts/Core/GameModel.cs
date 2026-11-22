@@ -248,6 +248,29 @@ namespace IslandTycoon
         /// <summary>Final rating of the completed wave, 0..3 stars (SCRUM-95). 0 while no wave is complete.</summary>
         public int WaveStars => WaveComplete ? Cfg.Stars(S.satisfaction) : 0;
 
+        /// <summary>
+        /// Rewards of the completed wave (SCRUM-97): coins for every served request plus a satisfaction bonus
+        /// that grows with the wave number, energy per star, Resort Value per served request and per star.
+        /// Only shown here; they are added to the resort when the player claims them.
+        /// </summary>
+        public WaveReward WaveRewards()
+        {
+            var r = new WaveReward();
+            if (!WaveComplete) return r;
+            int served = 0, coins = 0;
+            for (int n = 0; n < S.stats.Count; n++)
+            {
+                served += S.stats[n].served;
+                coins += S.stats[n].served * Math.Max(0, Cfg.Need(n).coinsPerServe);
+            }
+            float bonus = S.satisfaction * Cfg.satisfactionCoinBonus * (1f + S.waveIndex * Cfg.bonusGrowthPerWave);
+            int stars = WaveStars;
+            r.coins = coins + (int)Math.Round(bonus);
+            r.energy = stars * Math.Max(0, Cfg.energyPerStar);
+            r.resortValue = served * Math.Max(0, Cfg.valuePerServe) + stars * Math.Max(0, Cfg.valuePerStar);
+            return r;
+        }
+
         /// <summary>One word for a rating.</summary>
         public static string RatingWord(int stars) =>
             stars >= 3 ? "EXCELLENT!" : stars == 2 ? "GOOD JOB!" : stars == 1 ? "NOT BAD" : "GUESTS WERE UNHAPPY";

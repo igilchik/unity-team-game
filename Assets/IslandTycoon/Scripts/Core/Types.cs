@@ -69,6 +69,15 @@ namespace IslandTycoon
         public int Remaining => requested - served - failed;
     }
 
+    /// <summary>What the player earns for a completed wave.</summary>
+    [Serializable]
+    public struct WaveReward
+    {
+        public int coins;
+        public int energy;
+        public int resortValue;
+    }
+
     /// <summary>Whole state of the resort.</summary>
     [Serializable]
     public class GameState
