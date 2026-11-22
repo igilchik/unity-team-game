@@ -9,6 +9,7 @@ namespace IslandTycoon
     /// SCRUM-95: final rating, 0..3 stars and a word for it.
     /// SCRUM-96: Wave Satisfaction the wave reached, with a smiley.
     /// SCRUM-97: rewards earned in the wave: Coins, Energy and Resort Value.
+    /// SCRUM-98: one row per service of the wave (served / requested); services that worked well in green.
     /// </summary>
     public class WaveCompleteView : MonoBehaviour
     {
@@ -22,6 +23,11 @@ namespace IslandTycoon
         Image _face;
         Text _satisfaction;
         readonly Text[] _reward = new Text[3];   // coins, energy, resort value
+        readonly Image[] _rowIcon = new Image[Needs.Count];
+        readonly Text[] _rowName = new Text[Needs.Count];
+        readonly Text[] _rowCount = new Text[Needs.Count];
+        readonly Text[] _rowState = new Text[Needs.Count];
+        const float RowTop = -390, RowStep = 44;
         static readonly Color StarOff = new Color(0.25f, 0.25f, 0.25f, 0.45f);
         Button _continue;
         int _shownFor = -1;   // wave number the screen was already opened for
@@ -34,6 +40,9 @@ namespace IslandTycoon
         public Text CoinsReward => _reward[0];
         public Text EnergyReward => _reward[1];
         public Text ValueReward => _reward[2];
+        public bool RowVisible(int need) => _rowName[need].gameObject.activeSelf;
+        public string RowCount(int need) => _rowCount[need].text;
+        public string RowState(int need) => _rowState[need].text;
         /// <summary>Stars lit on the screen.</summary>
         public int StarsShown { get { int n = 0; foreach (var s in _stars) if (s.color == Color.white) n++; return n; } }
         public Button ContinueButton => _continue;
@@ -66,6 +75,23 @@ namespace IslandTycoon
                 _reward[i] = UIFactory.Text("Reward" + i, _content, "", 34, UIFactory.Brown, TextAnchor.MiddleLeft, Top,
                     new Vector2(x - 32, -308), new Vector2(180, 52));
                 _reward[i].rectTransform.pivot = new Vector2(0, 0.5f);
+            }
+
+            var line = UIFactory.Panel("Divider", _content, Top, new Vector2(0, -352), new Vector2(820, 4), new Color(0.45f, 0.28f, 0.1f, 0.35f));
+            line.raycastTarget = false;
+            line.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+
+            // services of the wave
+            for (int n = 0; n < Needs.Count; n++)
+            {
+                _rowIcon[n] = UIFactory.Icon("RowIcon" + n, _content, Art.Get(Art.NeedIcon(_m.Cfg, n)), Top, new Vector2(-330, 0), 38);
+                _rowName[n] = UIFactory.Text("RowName" + n, _content, _m.Cfg.Need(n).displayName, 26, UIFactory.Brown, TextAnchor.MiddleLeft, Top,
+                    new Vector2(-298, 0), new Vector2(230, 38));
+                _rowName[n].rectTransform.pivot = new Vector2(0, 0.5f);
+                _rowCount[n] = UIFactory.Label("RowCount" + n, _content, "", 26, UIFactory.Brown, Top, new Vector2(-10, 0), new Vector2(150, 38));
+                _rowState[n] = UIFactory.Text("RowState" + n, _content, "", 26, UIFactory.Green, TextAnchor.MiddleLeft, Top,
+                    new Vector2(90, 0), new Vector2(300, 38));
+                _rowState[n].rectTransform.pivot = new Vector2(0, 0.5f);
             }
             _continue = UIFactory.Button("Continue", _content, "UI/Kit/btn_primary_orange", "CONTINUE", 44, Bottom, new Vector2(0, 72),
                 new Vector2(310, 0), Close, true);
@@ -107,6 +133,25 @@ namespace IslandTycoon
             UIFactory.SetText(_reward[0], "+" + r.coins);
             UIFactory.SetText(_reward[1], "+" + r.energy);
             UIFactory.SetText(_reward[2], "+" + r.resortValue);
+
+            // one row per need guests asked for, stacked from the top
+            int row = 0;
+            for (int n = 0; n < Needs.Count; n++)
+            {
+                var st = _m.Stats(n);
+                bool show = st.requested > 0;
+                UIFactory.SetActive(_rowIcon[n], show); UIFactory.SetActive(_rowName[n], show);
+                UIFactory.SetActive(_rowCount[n], show); UIFactory.SetActive(_rowState[n], show);
+                if (!show) continue;
+                float y = RowTop - row * RowStep;
+                foreach (Graphic g in new Graphic[] { _rowIcon[n], _rowName[n], _rowCount[n], _rowState[n] })
+                    g.rectTransform.anchoredPosition = new Vector2(g.rectTransform.anchoredPosition.x, y);
+                UIFactory.SetText(_rowCount[n], $"{st.served}/{st.requested}");
+                bool good = _m.ServiceWorkedWell(n);
+                UIFactory.SetText(_rowState[n], good ? "worked well" : "");
+                _rowState[n].color = UIFactory.Green;
+                row++;
+            }
         }
 
         public void Close() => UIFactory.Close(_modal);
