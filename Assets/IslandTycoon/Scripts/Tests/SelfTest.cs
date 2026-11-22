@@ -31,6 +31,7 @@ namespace IslandTycoon
             Section("SCRUM-53 Satisfaction and bottlenecks", () => SatisfactionBottleneck(cfg));
             Section("SCRUM-59 Wave end with a backlog", () => WaveEndBacklog());
             Section("SCRUM-86 Moving workers costs no currency", () => FreeMoves(cfg));
+            Section("SCRUM-92 Building performance with and without a worker", () => WorkerPerformance());
 
             _sb.Insert(0, _fails == 0 ? "ALL CHECKS PASSED\n" : $"{_fails} CHECK(S) FAILED\n");
             return _sb.ToString();
@@ -483,6 +484,74 @@ namespace IslandTycoon
                 Check(panel.MoveTo.interactable, "MOVE is enabled with 0 coins");
             }
             finally { Dispose(go); }
+        }
+
+        // ------------------------------------------------------------------ SCRUM-92
+
+        /// <summary>Seconds of wave time until the only Hotel guest of the wave is served.</summary>
+        static float TimeToServe(GameModel m, int need, Action<GameModel> atHalf = null)
+        {
+            m.StartWave();
+            bool half = false;
+            for (int i = 0; i < 5000 && m.Stats(need).served == 0; i++)
+            {
+                m.Tick(0.05f);
+                if (!half && atHalf != null)
+                    foreach (var g in m.S.guests)
+                        if (g.stage == GuestStage.InService && g.progress >= 0.5f) { half = true; atHalf(m); break; }
+            }
+            return m.Stats(need).served == 1 ? m.S.waveTime : float.PositiveInfinity;
+        }
+
+        static void WorkerPerformance()
+        {
+            int rooms = (int)NeedType.Rooms, drinks = (int)NeedType.Drinks;
+            var cfg = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            try
+            {
+                cfg.patience = 1000f;   // nobody leaves: we only measure the speed
+                cfg.waves = new[] { new WaveConfig { guests = 1, spacing = 1f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+
+                var m0 = new GameModel(cfg);
+                Check(Mathf.Approximately(m0.WorkerSpeed(0), cfg.noWorkerFactor), "no worker = noWorkerFactor speed");
+                Check(Mathf.Approximately(m0.WorkerSpeed(1), 1f), "1 worker = normal speed");
+                Check(Mathf.Approximately(m0.WorkerSpeed(2), 1f + cfg.extraWorkerBonus), "2 workers = faster");
+                Check(m0.WorkerSpeed(0) < m0.WorkerSpeed(1) && m0.WorkerSpeed(1) < m0.WorkerSpeed(3), "more workers, more speed");
+                Check(Mathf.Approximately(m0.ServiceTime(rooms), cfg.Need(rooms).baseServiceTime), "1 worker serves in baseServiceTime");
+                Check(m0.Speed((int)NeedType.Relax) == 0f, "a locked building does not serve");
+
+                // the same guest, three staffing variants
+                var one = new GameModel(cfg);
+                float tOne = TimeToServe(one, rooms);
+
+                var none = new GameModel(cfg);
+                none.UnassignWorker(rooms);
+                Check(none.IsUnstaffed(rooms) && none.ServiceTime(rooms) > one.ServiceTime(rooms), "Hotel without a worker is slower");
+                float tNone = TimeToServe(none, rooms);
+
+                var two = new GameModel(cfg);
+                two.UnassignWorker(drinks);
+                two.AssignWorker(rooms);
+                float tTwo = TimeToServe(two, rooms);
+
+                Check(!float.IsInfinity(tNone), "a building without a worker still serves (slowly)");
+                Check(tNone > tOne && tOne > tTwo, $"service time: no worker {tNone:0.0} s > 1 worker {tOne:0.0} s > 2 workers {tTwo:0.0} s");
+                float walk = cfg.walkTime;
+                float ratio = (tNone - walk) / Mathf.Max(0.01f, tOne - walk);
+                Check(Mathf.Abs(ratio - 1f / cfg.noWorkerFactor) < 0.3f, $"no worker is {ratio:0.0}x slower (expected {1f / cfg.noWorkerFactor:0.0}x)");
+
+                // the worker leaves in the middle of the service: the guest keeps his progress, the rest is slow
+                var moved = new GameModel(cfg);
+                float progressAtMove = -1;
+                float tMoved = TimeToServe(moved, rooms, mm =>
+                {
+                    foreach (var g in mm.S.guests) if (g.stage == GuestStage.InService) progressAtMove = g.progress;
+                    mm.TransferWorker(rooms, drinks);
+                    foreach (var g in mm.S.guests) if (g.stage == GuestStage.InService) Check(Mathf.Approximately(g.progress, progressAtMove), "guest keeps the service progress after the move");
+                });
+                Check(progressAtMove >= 0.5f && tMoved > tOne && tMoved < tNone, "worker moved away mid-service: slower than 1 worker, faster than none");
+            }
+            finally { Dispose(cfg); }
         }
     }
 }
