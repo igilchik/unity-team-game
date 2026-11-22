@@ -95,6 +95,9 @@ namespace IslandTycoon
         [Tooltip("Service speed of an open building with no worker (1 = normal speed). Guests are still served, just slowly.")]
         [Range(0.05f, 1f)]
         public float noWorkerFactor = 0.35f;
+        [Tooltip("Extra speed of every worker after the first one (0.5 = +50 % per worker)")]
+        [Range(0f, 2f)]
+        public float extraWorkerBonus = 0.5f;
 
         [Header("Guests")]
         [Tooltip("Seconds a guest walks from the boat / between buildings")]
