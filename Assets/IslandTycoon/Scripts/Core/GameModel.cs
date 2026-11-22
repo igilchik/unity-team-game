@@ -245,6 +245,13 @@ namespace IslandTycoon
             return count == 0 ? 100f : 100f * score / count;
         }
 
+        /// <summary>Final rating of the completed wave, 0..3 stars (SCRUM-95). 0 while no wave is complete.</summary>
+        public int WaveStars => WaveComplete ? Cfg.Stars(S.satisfaction) : 0;
+
+        /// <summary>One word for a rating.</summary>
+        public static string RatingWord(int stars) =>
+            stars >= 3 ? "EXCELLENT!" : stars == 2 ? "GOOD JOB!" : stars == 1 ? "NOT BAD" : "GUESTS WERE UNHAPPY";
+
         /// <summary>Guests of the wave that have not arrived yet (0 once the arrivals are closed).</summary>
         public int GuestsToCome => S.arrivalsOpen ? S.plans.Count - S.nextPlan : 0;
 
