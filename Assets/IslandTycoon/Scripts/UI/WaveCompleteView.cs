@@ -10,6 +10,7 @@ namespace IslandTycoon
     /// SCRUM-96: Wave Satisfaction the wave reached, with a smiley.
     /// SCRUM-97: rewards earned in the wave: Coins, Energy and Resort Value.
     /// SCRUM-98: one row per service of the wave (served / requested); services that worked well in green.
+    /// SCRUM-99: services that need improvement in red, with the reason (lost guests / slow service).
     /// </summary>
     public class WaveCompleteView : MonoBehaviour
     {
@@ -89,8 +90,8 @@ namespace IslandTycoon
                     new Vector2(-298, 0), new Vector2(230, 38));
                 _rowName[n].rectTransform.pivot = new Vector2(0, 0.5f);
                 _rowCount[n] = UIFactory.Label("RowCount" + n, _content, "", 26, UIFactory.Brown, Top, new Vector2(-10, 0), new Vector2(150, 38));
-                _rowState[n] = UIFactory.Text("RowState" + n, _content, "", 26, UIFactory.Green, TextAnchor.MiddleLeft, Top,
-                    new Vector2(90, 0), new Vector2(300, 38));
+                _rowState[n] = UIFactory.Text("RowState" + n, _content, "", 24, UIFactory.Green, TextAnchor.MiddleLeft, Top,
+                    new Vector2(90, 0), new Vector2(370, 38));
                 _rowState[n].rectTransform.pivot = new Vector2(0, 0.5f);
             }
             _continue = UIFactory.Button("Continue", _content, "UI/Kit/btn_primary_orange", "CONTINUE", 44, Bottom, new Vector2(0, 72),
@@ -148,8 +149,8 @@ namespace IslandTycoon
                     g.rectTransform.anchoredPosition = new Vector2(g.rectTransform.anchoredPosition.x, y);
                 UIFactory.SetText(_rowCount[n], $"{st.served}/{st.requested}");
                 bool good = _m.ServiceWorkedWell(n);
-                UIFactory.SetText(_rowState[n], good ? "worked well" : "");
-                _rowState[n].color = UIFactory.Green;
+                UIFactory.SetText(_rowState[n], good ? "worked well" : $"needs improvement ({_m.ImprovementReason(n)})");
+                _rowState[n].color = good ? UIFactory.Green : UIFactory.Red;
                 row++;
             }
         }
