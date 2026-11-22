@@ -80,6 +80,17 @@ namespace IslandTycoon
         public int resortValue;
     }
 
+    /// <summary>Snapshot of a finished wave, taken when it reaches WAVE_COMPLETE (SCRUM-100).</summary>
+    [Serializable]
+    public class WaveResult
+    {
+        public int wave;             // 1-based number of the finished wave
+        public float satisfaction;   // final Wave Satisfaction 0..100
+        public int stars;            // final rating 0..3
+        public WaveReward reward;
+        public List<NeedStats> stats = new List<NeedStats>();   // copy of every need's numbers
+    }
+
     /// <summary>Whole state of the resort.</summary>
     [Serializable]
     public class GameState
