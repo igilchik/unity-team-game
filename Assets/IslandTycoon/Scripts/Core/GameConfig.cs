@@ -113,6 +113,12 @@ namespace IslandTycoon
         [Tooltip("Score of a request served right before the patience runs out")]
         public float lateScore = 0.4f;
 
+        [Header("Wave rating")]
+        [Tooltip("Wave Satisfaction (0..100) needed for 1, 2 and 3 stars")]
+        public int star1 = 40;
+        public int star2 = 70;
+        public int star3 = 90;
+
         [Header("Bottleneck")]
         [Tooltip("This many guests waiting at one building = bottleneck")]
         public int bottleneckQueue = 3;
@@ -162,6 +168,15 @@ namespace IslandTycoon
         {
             if (waves == null || waves.Length == 0) return new WaveConfig();
             return waves[Mathf.Clamp(index, 0, waves.Length - 1)];
+        }
+
+        /// <summary>Final rating of a wave: 0..3 stars for its Wave Satisfaction.</summary>
+        public int Stars(float satisfaction)
+        {
+            if (satisfaction >= star3) return 3;
+            if (satisfaction >= star2) return 2;
+            if (satisfaction >= star1) return 1;
+            return 0;
         }
 
         public PlotConfig Plot(int need)
