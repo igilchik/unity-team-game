@@ -119,6 +119,16 @@ namespace IslandTycoon
             return WorkerSpeed(b.workers);
         }
 
+        /// <summary>
+        /// Seconds one guest is served at the building right now: baseServiceTime / Speed (SCRUM-90).
+        /// Infinite for a closed building.
+        /// </summary>
+        public float ServiceTime(int need)
+        {
+            float speed = Speed(need);
+            return speed <= 0 ? float.PositiveInfinity : Math.Max(0.1f, Cfg.Need(need).baseServiceTime) / speed;
+        }
+
         /// <summary>Aggregated numbers of one need in the current wave.</summary>
         public NeedStats Stats(int need) => S.stats[need];
 
@@ -448,7 +458,8 @@ namespace IslandTycoon
                         if (g.waited > Cfg.patience) Fail(g);
                         break;
                     case GuestStage.InService:
-                        g.progress += dt / Math.Max(0.1f, Cfg.Need(g.CurrentNeed).baseServiceTime);
+                        // the workers of the building decide how fast the service goes
+                        g.progress += dt / ServiceTime(g.CurrentNeed);
                         if (g.progress >= 1f) Serve(g);
                         break;
                     case GuestStage.Leaving:
