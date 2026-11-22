@@ -102,14 +102,21 @@ namespace IslandTycoon
         public float NoWorkerSpeed => Math.Max(0.05f, Math.Min(1f, Cfg.noWorkerFactor));
 
         /// <summary>
+        /// Speed of a building with the given number of workers (SCRUM-89): one worker = normal speed 1,
+        /// every further worker adds extraWorkerBonus (2 workers = 1.5, 3 workers = 2 with the default 0.5).
+        /// </summary>
+        public float WorkerSpeed(int workers) =>
+            workers <= 0 ? NoWorkerSpeed : 1f + Math.Max(0f, Cfg.extraWorkerBonus) * (workers - 1);
+
+        /// <summary>
         /// Service speed multiplier of a building: 1 = normal. A building left without a worker
-        /// keeps working, but only at NoWorkerSpeed.
+        /// keeps working, but only at NoWorkerSpeed; more workers make it faster.
         /// </summary>
         public float Speed(int need)
         {
             var b = B(need);
             if (!b.exists || !b.unlocked) return 0f;
-            return b.workers == 0 ? NoWorkerSpeed : 1f;
+            return WorkerSpeed(b.workers);
         }
 
         /// <summary>Aggregated numbers of one need in the current wave.</summary>
