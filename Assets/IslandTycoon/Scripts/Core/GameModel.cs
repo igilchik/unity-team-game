@@ -278,6 +278,17 @@ namespace IslandTycoon
             return st.requested > 0 && st.failed == 0 && st.AvgScore >= Cfg.goodServiceScore;
         }
 
+        /// <summary>The need was requested in the finished wave but its guests waited too long or left (SCRUM-99).</summary>
+        public bool ServiceNeedsImprovement(int need) => Stats(need).requested > 0 && !ServiceWorkedWell(need);
+
+        /// <summary>Why a service needs improvement: lost guests first, otherwise slow service.</summary>
+        public string ImprovementReason(int need)
+        {
+            var st = Stats(need);
+            if (st.failed > 0) return st.failed == 1 ? "1 guest lost" : $"{st.failed} guests lost";
+            return "slow service";
+        }
+
         /// <summary>One word for a rating.</summary>
         public static string RatingWord(int stars) =>
             stars >= 3 ? "EXCELLENT!" : stars == 2 ? "GOOD JOB!" : stars == 1 ? "NOT BAD" : "GUESTS WERE UNHAPPY";
