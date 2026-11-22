@@ -67,6 +67,8 @@ namespace IslandTycoon
         public int failed;      // requests lost: the guest ran out of patience (score 0)
         public int Resolved => served + failed;
         public int Remaining => requested - served - failed;
+        /// <summary>Average score of the resolved requests 0..1 (1 when none resolved yet).</summary>
+        public float AvgScore => Resolved == 0 ? 1f : score / Resolved;
     }
 
     /// <summary>What the player earns for a completed wave.</summary>

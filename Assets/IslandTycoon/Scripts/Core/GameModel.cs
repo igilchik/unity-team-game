@@ -271,6 +271,13 @@ namespace IslandTycoon
             return r;
         }
 
+        /// <summary>The need was requested in the finished wave and its guests were served well (SCRUM-98).</summary>
+        public bool ServiceWorkedWell(int need)
+        {
+            var st = Stats(need);
+            return st.requested > 0 && st.failed == 0 && st.AvgScore >= Cfg.goodServiceScore;
+        }
+
         /// <summary>One word for a rating.</summary>
         public static string RatingWord(int stars) =>
             stars >= 3 ? "EXCELLENT!" : stars == 2 ? "GOOD JOB!" : stars == 1 ? "NOT BAD" : "GUESTS WERE UNHAPPY";

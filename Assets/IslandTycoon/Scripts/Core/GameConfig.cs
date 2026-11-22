@@ -132,6 +132,10 @@ namespace IslandTycoon
         public int valuePerServe = 2;
         public int valuePerStar = 10;
 
+        [Tooltip("A service whose average request score reaches this (0..1) worked well in the wave")]
+        [Range(0f, 1f)]
+        public float goodServiceScore = 0.8f;
+
         [Header("Bottleneck")]
         [Tooltip("This many guests waiting at one building = bottleneck")]
         public int bottleneckQueue = 3;
