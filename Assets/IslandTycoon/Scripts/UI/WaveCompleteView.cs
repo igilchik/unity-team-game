@@ -11,6 +11,8 @@ namespace IslandTycoon
     /// SCRUM-97: rewards earned in the wave: Coins, Energy and Resort Value.
     /// SCRUM-98: one row per service of the wave (served / requested); services that worked well in green.
     /// SCRUM-99: services that need improvement in red, with the reason (lost guests / slow service).
+    /// SCRUM-100: connected to the finished wave: opens on GameModel.WaveEnded and shows only the
+    /// snapshot of that wave (GameModel.LastResult), so nothing on it changes afterwards.
     /// </summary>
     public class WaveCompleteView : MonoBehaviour
     {
@@ -32,6 +34,7 @@ namespace IslandTycoon
         static readonly Color StarOff = new Color(0.25f, 0.25f, 0.25f, 0.45f);
         Button _continue;
         int _shownFor = -1;   // wave number the screen was already opened for
+        WaveResult _result;
 
         public RectTransform Modal => _modal;
         public Text TitleText => _title;
@@ -48,6 +51,8 @@ namespace IslandTycoon
         public int StarsShown { get { int n = 0; foreach (var s in _stars) if (s.color == Color.white) n++; return n; } }
         public Button ContinueButton => _continue;
         public bool IsOpen => UIFactory.IsOpen(_modal);
+        /// <summary>The wave results the screen shows.</summary>
+        public WaveResult Result => _result;
 
         public void Build(GameModel model, Transform root)
         {
@@ -96,51 +101,65 @@ namespace IslandTycoon
             }
             _continue = UIFactory.Button("Continue", _content, "UI/Kit/btn_primary_orange", "CONTINUE", 44, Bottom, new Vector2(0, 72),
                 new Vector2(310, 0), Close, true);
+            _m.WaveEnded += OnWaveEnded;
             _m.Changed += Refresh;
             Refresh();
         }
 
         void OnDestroy()
         {
-            if (_m != null) _m.Changed -= Refresh;
+            if (_m == null) return;
+            _m.WaveEnded -= OnWaveEnded;
+            _m.Changed -= Refresh;
         }
 
-        /// <summary>Opens the screen once when the wave is complete.</summary>
+        /// <summary>The wave just ended: show its results.</summary>
+        void OnWaveEnded()
+        {
+            if (_m.LastResult != null) Show(_m.LastResult);
+        }
+
+        /// <summary>Opens the screen once per finished wave (also if it was built after the wave ended); closes it when a new wave starts.</summary>
         public void Refresh()
         {
-            if (_m.WaveComplete && _shownFor != _m.WaveNumber)
-            {
-                _shownFor = _m.WaveNumber;
-                Fill();
-                UIFactory.Open(_modal);
-            }
+            var r = _m.LastResult;
+            if (_m.WaveComplete && r != null && _shownFor != r.wave) Show(r);
             else if (!_m.WaveComplete && IsOpen) UIFactory.Close(_modal);
         }
 
-        /// <summary>Writes the finished wave into the screen.</summary>
-        void Fill()
+        /// <summary>Fills the screen with the results of a finished wave and opens it.</summary>
+        public void Show(WaveResult r)
         {
-            UIFactory.SetText(_title, $"WAVE {_m.WaveNumber} COMPLETE");
-            int stars = _m.WaveStars;
+            if (r == null) return;
+            _result = r;
+            _shownFor = r.wave;
+            Fill(r);
+            UIFactory.Open(_modal);
+        }
+
+        /// <summary>Writes the finished wave into the screen.</summary>
+        void Fill(WaveResult r)
+        {
+            UIFactory.SetText(_title, $"WAVE {r.wave} COMPLETE");
+            int stars = r.stars;
             for (int i = 0; i < 3; i++) _stars[i].color = i < stars ? Color.white : StarOff;
             UIFactory.SetText(_summary, GameModel.RatingWord(stars));
             _summary.color = stars >= 2 ? UIFactory.Green : stars == 1 ? UIFactory.Brown : UIFactory.Red;
 
-            float sat = _m.S.satisfaction;
+            float sat = r.satisfaction;
             UIFactory.SetSprite(_face, Art.Get(Art.FaceIcon(sat)));
             UIFactory.SetText(_satisfaction, $"Satisfaction {Mathf.RoundToInt(sat)}%");
 
-            var r = _m.WaveRewards();
-            UIFactory.SetText(_reward[0], "+" + r.coins);
-            UIFactory.SetText(_reward[1], "+" + r.energy);
-            UIFactory.SetText(_reward[2], "+" + r.resortValue);
+            UIFactory.SetText(_reward[0], "+" + r.reward.coins);
+            UIFactory.SetText(_reward[1], "+" + r.reward.energy);
+            UIFactory.SetText(_reward[2], "+" + r.reward.resortValue);
 
             // one row per need guests asked for, stacked from the top
             int row = 0;
             for (int n = 0; n < Needs.Count; n++)
             {
-                var st = _m.Stats(n);
-                bool show = st.requested > 0;
+                var st = n < r.stats.Count ? r.stats[n] : null;
+                bool show = st != null && st.requested > 0;
                 UIFactory.SetActive(_rowIcon[n], show); UIFactory.SetActive(_rowName[n], show);
                 UIFactory.SetActive(_rowCount[n], show); UIFactory.SetActive(_rowState[n], show);
                 if (!show) continue;
@@ -148,8 +167,8 @@ namespace IslandTycoon
                 foreach (Graphic g in new Graphic[] { _rowIcon[n], _rowName[n], _rowCount[n], _rowState[n] })
                     g.rectTransform.anchoredPosition = new Vector2(g.rectTransform.anchoredPosition.x, y);
                 UIFactory.SetText(_rowCount[n], $"{st.served}/{st.requested}");
-                bool good = _m.ServiceWorkedWell(n);
-                UIFactory.SetText(_rowState[n], good ? "worked well" : $"needs improvement ({_m.ImprovementReason(n)})");
+                bool good = _m.WorkedWell(st);
+                UIFactory.SetText(_rowState[n], good ? "worked well" : $"needs improvement ({GameModel.ImprovementReason(st)})");
                 _rowState[n].color = good ? UIFactory.Green : UIFactory.Red;
                 row++;
             }

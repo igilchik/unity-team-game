@@ -32,6 +32,7 @@ namespace IslandTycoon
             Section("SCRUM-59 Wave end with a backlog", () => WaveEndBacklog());
             Section("SCRUM-86 Moving workers costs no currency", () => FreeMoves(cfg));
             Section("SCRUM-92 Building performance with and without a worker", () => WorkerPerformance());
+            Section("SCRUM-100 Wave Complete screen shows the finished wave", () => WaveCompleteScreen());
 
             _sb.Insert(0, _fails == 0 ? "ALL CHECKS PASSED\n" : $"{_fails} CHECK(S) FAILED\n");
             return _sb.ToString();
@@ -552,6 +553,77 @@ namespace IslandTycoon
                 Check(progressAtMove >= 0.5f && tMoved > tOne && tMoved < tNone, "worker moved away mid-service: slower than 1 worker, faster than none");
             }
             finally { Dispose(cfg); }
+        }
+
+        // ------------------------------------------------------------------ SCRUM-100
+
+        static void WaveCompleteScreen()
+        {
+            var cfg = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            var go = new GameObject("SelfTest_WaveComplete");
+            try
+            {
+                // a rush at the Hotel: some guests are lost, so the Hotel needs improvement
+                cfg.waves = new[] { new WaveConfig { guests = 8, spacing = 0.1f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+                var m = new GameModel(cfg);
+                var hud = go.AddComponent<HudView>();
+                hud.Build(m);
+                var screen = go.AddComponent<WaveCompleteView>();
+                screen.Build(m, hud.Root);
+                Check(!screen.IsOpen && m.LastResult == null, "screen is closed before any wave ended");
+
+                m.StartWave();
+                for (int i = 0; i < 50; i++) m.Tick(0.1f);
+                Check(!screen.IsOpen, "screen stays closed during the wave");
+                for (int i = 0; i < 5000 && !m.WaveComplete; i++) m.Tick(0.1f);
+
+                var r = m.LastResult;
+                Check(m.WaveComplete && r != null && r.wave == 1, "the finished wave leaves a result");
+                Check(screen.IsOpen && screen.Result == r, "screen opens by itself with that result");
+                Check(screen.TitleText.text == "WAVE 1 COMPLETE", "title names the wave");
+                Check(r.stars == cfg.Stars(r.satisfaction) && screen.StarsShown == r.stars, $"{r.stars} star(s) for {r.satisfaction:0} % satisfaction");
+                Check(screen.SatisfactionText.text.Contains($"{Mathf.RoundToInt(r.satisfaction)}%"), "screen shows the reached satisfaction");
+                Check(screen.SatisfactionFace.sprite == Art.Get(Art.FaceIcon(r.satisfaction)), "smiley matches the satisfaction");
+
+                var w = m.WaveRewards();
+                Check(r.reward.coins == w.coins && r.reward.coins > 0, "coins reward is shown");
+                Check(screen.CoinsReward.text == "+" + r.reward.coins && screen.EnergyReward.text == "+" + r.reward.energy
+                      && screen.ValueReward.text == "+" + r.reward.resortValue, "rewards on the screen match the result");
+                Check(m.S.coins == cfg.startCoins, "rewards are only shown, not added yet");
+
+                int rooms = (int)NeedType.Rooms;
+                Check(screen.RowVisible(rooms) && !screen.RowVisible((int)NeedType.Drinks), "only requested services have a row");
+                Check(screen.RowCount(rooms) == $"{r.stats[rooms].served}/{r.stats[rooms].requested}", "row shows served / requested");
+                Check(r.stats[rooms].failed > 0 && screen.RowState(rooms).StartsWith("needs improvement") && screen.RowState(rooms).Contains("lost"),
+                    "Hotel with lost guests needs improvement");
+
+                // the snapshot does not change any more
+                m.S.stats[rooms].served += 100;
+                m.Tick(0.1f);
+                Check(r.stats[rooms].served != m.S.stats[rooms].served && screen.RowCount(rooms) == $"{r.stats[rooms].served}/{r.stats[rooms].requested}",
+                    "screen keeps the finished wave's numbers");
+
+                screen.ContinueButton.onClick.Invoke();
+                Check(!screen.IsOpen, "CONTINUE closes the screen");
+                m.NotifyChanged();
+                Check(!screen.IsOpen, "the closed screen does not open again for the same wave");
+
+                // a calm wave: every service worked well
+                var calm = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+                try
+                {
+                    calm.waves = new[] { new WaveConfig { guests = 3, spacing = 20f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+                    var mc = new GameModel(calm);
+                    mc.StartWave();
+                    for (int i = 0; i < 5000 && !mc.WaveComplete; i++) mc.Tick(0.1f);
+                    var screen2 = go.AddComponent<WaveCompleteView>();
+                    screen2.Build(mc, hud.Root);
+                    Check(screen2.IsOpen && screen2.StarsShown == 3, "calm wave: 3 stars (screen built after the wave also opens)");
+                    Check(screen2.RowState(rooms) == "worked well", "calm wave: Hotel worked well");
+                }
+                finally { Dispose(calm); }
+            }
+            finally { Dispose(go); Dispose(cfg); }
         }
     }
 }

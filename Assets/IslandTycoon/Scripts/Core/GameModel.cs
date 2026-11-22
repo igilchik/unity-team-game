@@ -272,21 +272,39 @@ namespace IslandTycoon
         }
 
         /// <summary>The need was requested in the finished wave and its guests were served well (SCRUM-98).</summary>
-        public bool ServiceWorkedWell(int need)
-        {
-            var st = Stats(need);
-            return st.requested > 0 && st.failed == 0 && st.AvgScore >= Cfg.goodServiceScore;
-        }
+        public bool ServiceWorkedWell(int need) => WorkedWell(Stats(need));
+
+        /// <summary>The numbers of one service show it worked well: requested, nobody lost, good average score.</summary>
+        public bool WorkedWell(NeedStats st) => st != null && st.requested > 0 && st.failed == 0 && st.AvgScore >= Cfg.goodServiceScore;
 
         /// <summary>The need was requested in the finished wave but its guests waited too long or left (SCRUM-99).</summary>
         public bool ServiceNeedsImprovement(int need) => Stats(need).requested > 0 && !ServiceWorkedWell(need);
 
         /// <summary>Why a service needs improvement: lost guests first, otherwise slow service.</summary>
-        public string ImprovementReason(int need)
+        public string ImprovementReason(int need) => ImprovementReason(Stats(need));
+
+        public static string ImprovementReason(NeedStats st)
         {
-            var st = Stats(need);
-            if (st.failed > 0) return st.failed == 1 ? "1 guest lost" : $"{st.failed} guests lost";
+            if (st != null && st.failed > 0) return st.failed == 1 ? "1 guest lost" : $"{st.failed} guests lost";
             return "slow service";
+        }
+
+        /// <summary>Results of the last finished wave; null before the first wave ends (SCRUM-100).</summary>
+        public WaveResult LastResult { get; private set; }
+
+        /// <summary>Takes the snapshot of the wave that just reached WAVE_COMPLETE.</summary>
+        WaveResult MakeResult()
+        {
+            var r = new WaveResult
+            {
+                wave = WaveNumber,
+                satisfaction = S.satisfaction,
+                stars = WaveStars,
+                reward = WaveRewards(),
+            };
+            foreach (var st in S.stats)
+                r.stats.Add(new NeedStats { requested = st.requested, served = st.served, failed = st.failed, score = st.score });
+            return r;
         }
 
         /// <summary>One word for a rating.</summary>
@@ -600,6 +618,7 @@ namespace IslandTycoon
             S.guests.Clear();   // the last guests walk off the island
             S.satisfaction = WaveSatisfaction();
             S.phase = GamePhase.WaveComplete;
+            LastResult = MakeResult();   // the results screen reads this snapshot
             WaveEnded?.Invoke();
         }
 
