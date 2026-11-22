@@ -40,6 +40,7 @@ namespace IslandTycoon
         HudView _hud;
         NeedsPanel _needs;
         WorkerPanel _workers;
+        WaveCompleteView _waveComplete;
 
         void Awake()
         {
@@ -63,6 +64,10 @@ namespace IslandTycoon
             _workers = _hud.gameObject.AddComponent<WorkerPanel>();
             _workers.Build(Model, _hud.Root, () => Selected, MoveWorker, () => SelectBuilding(-1),
                 StartTransfer, () => TransferFrom >= 0);
+
+            // SCRUM-94: results of the finished wave, above all other HUD panels
+            _waveComplete = _hud.gameObject.AddComponent<WaveCompleteView>();
+            _waveComplete.Build(Model, _hud.Root);
 
             MainMenu.PlayPressed += OnPlay;
         }
