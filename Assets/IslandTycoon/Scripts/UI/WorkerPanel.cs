@@ -13,6 +13,7 @@ namespace IslandTycoon
     /// SCRUM-83: MOVE takes a worker out of this building; the next tapped building gets him.
     /// SCRUM-84: a building left without a worker says so.
     /// SCRUM-90: shows how fast the building serves with its current workers.
+    /// SCRUM-91: during the wave the time left of the current guest and the queue wait follow every worker move.
     /// </summary>
     public class WorkerPanel : MonoBehaviour
     {
@@ -55,7 +56,7 @@ namespace IslandTycoon
             _icon = UIFactory.Icon("Icon", content, null, left, new Vector2(72, 10), 130);
             _title = UIFactory.Text("Title", content, "", 38, UIFactory.Brown, TextAnchor.MiddleLeft, tl, new Vector2(160, -26), new Vector2(560, 56));
             _title.rectTransform.pivot = new Vector2(0, 0.5f);
-            _info = UIFactory.Text("Info", content, "", 25, UIFactory.Brown, TextAnchor.MiddleLeft, tl, new Vector2(160, -74), new Vector2(410, 50));
+            _info = UIFactory.Text("Info", content, "", 23, UIFactory.Brown, TextAnchor.MiddleLeft, tl, new Vector2(160, -80), new Vector2(560, 62));
             _info.rectTransform.pivot = new Vector2(0, 0.5f);
 
             _minus = UIFactory.SignButton("Minus", content, false, bl, new Vector2(205, 48), 96, () => Press(-1));
@@ -112,11 +113,17 @@ namespace IslandTycoon
             if (b.unlocked)
             {
                 UIFactory.SetText(_title, nc.buildingName);
-                UIFactory.SetText(_info, _transferring()
-                    ? "<color=#1E7B74>Tap the building that gets the worker</color>"
-                    : _m.IsUnstaffed(n)
+                string info;
+                if (_transferring()) info = "<color=#1E7B74>Tap the building that gets the worker</color>";
+                else
+                {
+                    info = _m.IsUnstaffed(n)
                         ? $"<color=#C0392B>No worker here! Slow service</color>   ·   {_m.ServiceTime(n):0.#} s / guest   ·   Queue {_m.QueueCount(n)}"
-                        : $"Speed x{_m.Speed(n):0.##}   ·   {_m.ServiceTime(n):0.#} s / guest   ·   Queue {_m.QueueCount(n)}");
+                        : $"Speed x{_m.Speed(n):0.##}   ·   {_m.ServiceTime(n):0.#} s / guest   ·   Queue {_m.QueueCount(n)}";
+                    if (_m.InWave)
+                        info += $"\n<size=20>Now serving: {_m.ServiceLeft(n):0.0} s left   ·   wait ~{_m.EstimatedWait(n):0} s</size>";
+                }
+                UIFactory.SetText(_info, info);
                 UIFactory.SetText(_workers, $"<size=22>Workers</size>\n{b.workers}");
                 UIFactory.SetText(_free, _m.CanMoveWorkers
                     ? $"Free workers: {_m.FreeWorkers}\n<size=20>{(_m.MoveCost == 0 ? "moves are free" : $"move: {_m.MoveCost} coins")}</size>"

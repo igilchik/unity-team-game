@@ -129,6 +129,43 @@ namespace IslandTycoon
             return speed <= 0 ? float.PositiveInfinity : Math.Max(0.1f, Cfg.Need(need).baseServiceTime) / speed;
         }
 
+        /// <summary>
+        /// Seconds until the building finishes the guest it serves now, at its current speed (0 = nobody in service).
+        /// A guest keeps the progress made so far when workers move: only the rest goes at the new speed (SCRUM-91).
+        /// </summary>
+        public float ServiceLeft(int need)
+        {
+            float left = 0;
+            foreach (var g in S.guests)
+                if (g.stage == GuestStage.InService && g.CurrentNeed == need)
+                    left = Math.Max(left, (1f - g.progress) * ServiceTime(need));
+            return left;
+        }
+
+        /// <summary>
+        /// Rough wait of a guest joining the queue now: the current service plus everybody ahead of him,
+        /// recomputed from the workers the building has right now.
+        /// </summary>
+        public float EstimatedWait(int need)
+        {
+            if (Speed(need) <= 0) return float.PositiveInfinity;
+            int slots = Math.Max(1, Cfg.serviceSlots);
+            return ServiceLeft(need) + QueueCount(need) * ServiceTime(need) / slots;
+        }
+
+        /// <summary>
+        /// Requests of a building after its workers changed (SCRUM-91): guests in service keep their progress
+        /// and continue at the new speed, waiting guests fill free slots at once, the live satisfaction follows.
+        /// </summary>
+        void UpdateNeedProcessing(int need)
+        {
+            if (!InWave) return;
+            foreach (var g in S.guests)
+                if (g.CurrentNeed == need && g.stage == GuestStage.InService) g.progress = Math.Max(0f, Math.Min(1f, g.progress));
+            FillServiceSlots(need);
+            S.satisfaction = LiveSatisfaction();
+        }
+
         /// <summary>Aggregated numbers of one need in the current wave.</summary>
         public NeedStats Stats(int need) => S.stats[need];
 
@@ -299,6 +336,7 @@ namespace IslandTycoon
             if (delta < 0 && b.workers <= 0) return false;
             if (!PayMove()) return false;
             b.workers += delta > 0 ? 1 : -1;
+            UpdateNeedProcessing(need);
             WorkersMoved?.Invoke(need);
             if (delta > 0) UpdateNewBuilding(need);
             Changed?.Invoke();
@@ -328,6 +366,8 @@ namespace IslandTycoon
             if (!CanTransfer(from, to) || !PayMove()) return false;
             B(from).workers--;
             B(to).workers++;
+            UpdateNeedProcessing(from);
+            UpdateNeedProcessing(to);
             WorkersMoved?.Invoke(from);
             WorkersMoved?.Invoke(to);
             UpdateNewBuilding(to);
