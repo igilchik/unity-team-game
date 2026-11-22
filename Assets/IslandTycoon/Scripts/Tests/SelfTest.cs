@@ -30,6 +30,7 @@ namespace IslandTycoon
             Section("SCRUM-79 Moving workers between buildings", () => WorkerMoves(cfg));
             Section("SCRUM-53 Satisfaction and bottlenecks", () => SatisfactionBottleneck(cfg));
             Section("SCRUM-59 Wave end with a backlog", () => WaveEndBacklog());
+            Section("SCRUM-86 Moving workers costs no currency", () => FreeMoves(cfg));
 
             _sb.Insert(0, _fails == 0 ? "ALL CHECKS PASSED\n" : $"{_fails} CHECK(S) FAILED\n");
             return _sb.ToString();
@@ -441,6 +442,47 @@ namespace IslandTycoon
                 Check(requested == 5, "requests of guests that did not come are dropped");
             }
             finally { Dispose(go); Dispose(rush); Dispose(timed); }
+        }
+
+        // ------------------------------------------------------------------ SCRUM-86
+
+        /// <summary>Every kind of worker move (assign, take out, MOVE, + from another building) keeps coins and energy.</summary>
+        static void FreeMoves(GameConfig cfg)
+        {
+            int rooms = (int)NeedType.Rooms, drinks = (int)NeedType.Drinks, food = (int)NeedType.Food;
+            var m = new GameModel(cfg);
+            Check(cfg.workerMoveCost == 0 && m.MoveCost == 0, "a move costs 0 coins");
+            int coins = m.S.coins, energy = m.S.energy;
+
+            Check(m.UnassignWorker(rooms) && m.AssignWorker(drinks), "take out + assign before the wave");
+            Check(m.TransferWorker(drinks, rooms), "instant MOVE before the wave");
+            Check(m.S.coins == coins && m.S.energy == energy, "no coins or energy spent before the wave");
+
+            m.StartWave();
+            for (int i = 0; i < 20; i++) m.Tick(0.1f);
+            Check(m.TransferWorker(food, drinks) && m.PullWorker(food), "MOVE and + during the wave");
+            Check(m.S.coins == coins && m.S.energy == energy, "no coins or energy spent during the wave");
+
+            // the player can move workers even with an empty wallet
+            m.S.coins = 0;
+            m.S.energy = 0;
+            Check(m.CanAffordMove && m.TransferWorker(rooms, food), "moves work with 0 coins");
+            Check(m.S.coins == 0 && m.S.energy == 0, "the wallet stays at 0");
+            Check(m.AssignedWorkers + m.FreeWorkers == m.S.totalWorkers, "no worker lost by the free moves");
+
+            // the UI says so too
+            var go = new GameObject("SelfTest_FreeMoves");
+            try
+            {
+                var panel = go.AddComponent<WorkerPanel>();
+                var hud = go.AddComponent<HudView>();
+                hud.Build(m);
+                panel.Build(m, hud.Root, () => drinks, d => { }, () => { }, () => { }, () => false);
+                panel.Refresh();
+                Check(panel.FreeText.text.Contains("moves are free"), "worker panel says moves are free");
+                Check(panel.MoveTo.interactable, "MOVE is enabled with 0 coins");
+            }
+            finally { Dispose(go); }
         }
     }
 }
