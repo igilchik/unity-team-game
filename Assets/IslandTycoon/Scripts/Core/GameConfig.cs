@@ -91,6 +91,11 @@ namespace IslandTycoon
         [Tooltip("Coins paid for moving one worker (0 = moves are free)")]
         public int workerMoveCost = 0;
 
+        [Header("Building performance")]
+        [Tooltip("Service speed of an open building with no worker (1 = normal speed). Guests are still served, just slowly.")]
+        [Range(0.05f, 1f)]
+        public float noWorkerFactor = 0.35f;
+
         [Header("Guests")]
         [Tooltip("Seconds a guest walks from the boat / between buildings")]
         public float walkTime = 2f;

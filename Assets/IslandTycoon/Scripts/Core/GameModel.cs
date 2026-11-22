@@ -96,6 +96,22 @@ namespace IslandTycoon
             get { int n = 0; for (int i = 0; i < S.buildings.Count; i++) if (IsUnstaffed(i)) n++; return n; }
         }
 
+        // ------------------------------------------------------------------ building performance
+
+        /// <summary>Speed of a building without a worker, relative to the normal speed (SCRUM-88).</summary>
+        public float NoWorkerSpeed => Math.Max(0.05f, Math.Min(1f, Cfg.noWorkerFactor));
+
+        /// <summary>
+        /// Service speed multiplier of a building: 1 = normal. A building left without a worker
+        /// keeps working, but only at NoWorkerSpeed.
+        /// </summary>
+        public float Speed(int need)
+        {
+            var b = B(need);
+            if (!b.exists || !b.unlocked) return 0f;
+            return b.workers == 0 ? NoWorkerSpeed : 1f;
+        }
+
         /// <summary>Aggregated numbers of one need in the current wave.</summary>
         public NeedStats Stats(int need) => S.stats[need];
 
