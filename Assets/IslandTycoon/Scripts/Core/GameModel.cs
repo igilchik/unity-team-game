@@ -21,6 +21,8 @@ namespace IslandTycoon
         public event Action WaveEnded;
         /// <summary>Workers of a building changed (need).</summary>
         public event Action<int> WorkersMoved;
+        /// <summary>A building received a worker (assigned or moved in); its state is already updated.</summary>
+        public event Action<int> BuildingStaffed;
 
         public GameModel(GameConfig cfg)
         {
@@ -265,6 +267,7 @@ namespace IslandTycoon
             if (!PayMove()) return false;
             b.workers += delta > 0 ? 1 : -1;
             WorkersMoved?.Invoke(need);
+            if (delta > 0) UpdateNewBuilding(need);
             Changed?.Invoke();
             return true;
         }
@@ -294,6 +297,7 @@ namespace IslandTycoon
             B(to).workers++;
             WorkersMoved?.Invoke(from);
             WorkersMoved?.Invoke(to);
+            UpdateNewBuilding(to);
             Changed?.Invoke();
             return true;
         }
@@ -433,24 +437,39 @@ namespace IslandTycoon
             S.guests.RemoveAll(g => g.stage == GuestStage.Done);
 
             // queues -> free service slots, first come first served
-            foreach (var b in S.buildings)
-            {
-                if (!b.unlocked) continue;
-                int free = Math.Max(1, Cfg.serviceSlots) - InServiceCount(b.need);
-                foreach (var g in S.guests)
-                {
-                    if (free <= 0) break;
-                    if (g.stage != GuestStage.Queued || g.CurrentNeed != b.need) continue;
-                    g.stage = GuestStage.InService;
-                    g.progress = 0;
-                    free--;
-                }
-            }
+            foreach (var b in S.buildings) FillServiceSlots(b.need);
             S.satisfaction = LiveSatisfaction();
 
             // the wave ends only when no new guests come and every queue is empty
             if (S.phase == GamePhase.WaveFinishing && RemainingRequests() == 0) EndWave();
             Changed?.Invoke();
+        }
+
+        /// <summary>Guests waiting in the queue of an open building go into its free service slots (first come, first served).</summary>
+        void FillServiceSlots(int need)
+        {
+            var b = B(need);
+            if (!b.unlocked) return;
+            int free = Math.Max(1, Cfg.serviceSlots) - InServiceCount(need);
+            foreach (var g in S.guests)
+            {
+                if (free <= 0) break;
+                if (g.stage != GuestStage.Queued || g.CurrentNeed != need) continue;
+                g.stage = GuestStage.InService;
+                g.progress = 0;
+                free--;
+            }
+        }
+
+        /// <summary>
+        /// The building that just got a worker is updated in the same moment: it counts as staffed,
+        /// and during a wave its waiting guests are taken into service right away, not on the next tick.
+        /// </summary>
+        void UpdateNewBuilding(int need)
+        {
+            if (InWave) FillServiceSlots(need);
+            S.satisfaction = InWave ? LiveSatisfaction() : S.satisfaction;
+            BuildingStaffed?.Invoke(need);
         }
 
         /// <summary>WAVE_FINISHING -> WAVE_COMPLETE: the final Wave Satisfaction is fixed.</summary>
