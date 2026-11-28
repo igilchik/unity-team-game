@@ -27,6 +27,8 @@ namespace IslandTycoon
         public event Action<int> CoinsAdded;
         /// <summary>Energy was added to the player (amount really added).</summary>
         public event Action<int> EnergyAdded;
+        /// <summary>Resort Value changed (by how much).</summary>
+        public event Action<int> ResortValueChanged;
 
         public GameModel(GameConfig cfg)
         {
@@ -295,6 +297,23 @@ namespace IslandTycoon
             EnergyAdded?.Invoke(added);
             Changed?.Invoke();
             return added;
+        }
+
+        /// <summary>
+        /// Updates the Resort Value of the player by delta (SCRUM-105). It never drops below 0.
+        /// Returns the real change.
+        /// </summary>
+        public int AddResortValue(int delta)
+        {
+            if (delta == 0) return 0;
+            int before = S.resortValue;
+            long v = (long)before + delta;
+            S.resortValue = (int)Math.Max(0, Math.Min(v, int.MaxValue));
+            int change = S.resortValue - before;
+            if (change == 0) return 0;
+            ResortValueChanged?.Invoke(change);
+            Changed?.Invoke();
+            return change;
         }
 
         /// <summary>Total of a reward, for quick checks (empty reward = 0).</summary>

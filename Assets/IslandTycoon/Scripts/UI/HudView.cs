@@ -17,6 +17,7 @@ namespace IslandTycoon
     /// SCRUM-52: Wave Satisfaction bar with a smiley under the plaque during the wave.
     /// SCRUM-103: the Coins pill bumps when coins are added to the player.
     /// SCRUM-104: ... and the Energy pill when energy is added.
+    /// SCRUM-105: ... and the Resort Value pill when the resort value changes.
     /// </summary>
     public class HudView : MonoBehaviour
     {
@@ -30,8 +31,8 @@ namespace IslandTycoon
         Image _satFace;
         Text _satText;
         const float SatWidth = 430, SatHeight = 72;
-        RectTransform _coinsPill, _energyPill;
-        float _coinsBump = -1f, _energyBump = -1f;   // time of the last bump
+        RectTransform _coinsPill, _energyPill, _valuePill;
+        float _coinsBump = -1f, _energyBump = -1f, _valueBump = -1f;   // time of the last bump
 
         public Text TitleText => _title;
         public Text StatusText => _status;
@@ -90,6 +91,8 @@ namespace IslandTycoon
             _energyPill = (RectTransform)_energy.transform.parent.parent;
             _m.CoinsAdded += OnCoinsAdded;
             _m.EnergyAdded += OnEnergyAdded;
+            _valuePill = (RectTransform)_value.transform.parent.parent;
+            _m.ResortValueChanged += OnValueChanged;
             _m.Changed += Refresh;
             Refresh();
         }
@@ -100,7 +103,10 @@ namespace IslandTycoon
             _m.Changed -= Refresh;
             _m.CoinsAdded -= OnCoinsAdded;
             _m.EnergyAdded -= OnEnergyAdded;
+            _m.ResortValueChanged -= OnValueChanged;
         }
+
+        void OnValueChanged(int delta) => _valueBump = Time.unscaledTime;
 
         void OnCoinsAdded(int amount) => _coinsBump = Time.unscaledTime;
         void OnEnergyAdded(int amount) => _energyBump = Time.unscaledTime;
@@ -109,6 +115,7 @@ namespace IslandTycoon
         {
             Bump(_coinsPill, _coinsBump);
             Bump(_energyPill, _energyBump);
+            Bump(_valuePill, _valueBump);
         }
 
         /// <summary>Short scale bump of a pill after its value went up.</summary>
