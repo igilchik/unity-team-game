@@ -88,6 +88,8 @@ namespace IslandTycoon
         [Header("Start")]
         public int startCoins = 60;
         public int startEnergy = 6;
+        [Tooltip("Most Energy the player can hold")]
+        public int maxEnergy = 30;
 
         [Header("Workers")]
         [Tooltip("Coins paid for moving one worker (0 = moves are free)")]

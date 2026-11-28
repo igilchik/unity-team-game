@@ -25,6 +25,8 @@ namespace IslandTycoon
         public event Action<int> BuildingStaffed;
         /// <summary>Coins were added to the player (amount added).</summary>
         public event Action<int> CoinsAdded;
+        /// <summary>Energy was added to the player (amount really added).</summary>
+        public event Action<int> EnergyAdded;
 
         public GameModel(GameConfig cfg)
         {
@@ -274,6 +276,25 @@ namespace IslandTycoon
             CoinsAdded?.Invoke(amount);
             Changed?.Invoke();
             return amount;
+        }
+
+        /// <summary>Most Energy the player can hold (at least the start Energy).</summary>
+        public int MaxEnergy => Math.Max(Cfg.maxEnergy, Cfg.startEnergy);
+
+        /// <summary>
+        /// Adds Energy to the current state of the player (SCRUM-104), up to MaxEnergy.
+        /// Returns how much was really added (0 when the player is already full).
+        /// </summary>
+        public int AddEnergy(int amount)
+        {
+            if (amount <= 0) return 0;
+            int before = S.energy;
+            S.energy = Math.Max(before, Math.Min(MaxEnergy, before + amount));
+            int added = S.energy - before;
+            if (added <= 0) return 0;
+            EnergyAdded?.Invoke(added);
+            Changed?.Invoke();
+            return added;
         }
 
         /// <summary>Total of a reward, for quick checks (empty reward = 0).</summary>
