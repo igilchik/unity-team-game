@@ -165,14 +165,16 @@ namespace IslandTycoon
         public WaveConfig[] waves =
         {
             // volume of needs: more guests, closer together, later with 2 needs each
-            new WaveConfig { guests = 5,  spacing = 3.0f,  minNeeds = 1, maxNeeds = 1 },   // Wave 1
-            new WaveConfig { guests = 7,  spacing = 2.7f,  minNeeds = 1, maxNeeds = 1 },   // Wave 2
-            new WaveConfig { guests = 8,  spacing = 2.55f, minNeeds = 1, maxNeeds = 2 },   // Wave 3
-            new WaveConfig { guests = 9,  spacing = 2.4f,  minNeeds = 1, maxNeeds = 2 },   // Wave 4
-            new WaveConfig { guests = 10, spacing = 2.2f,  minNeeds = 1, maxNeeds = 2 },   // Wave 5
-            new WaveConfig { guests = 12, spacing = 2.05f, minNeeds = 1, maxNeeds = 2 },   // Wave 6
-            new WaveConfig { guests = 13, spacing = 1.85f, minNeeds = 1, maxNeeds = 2 },   // Wave 7
-            new WaveConfig { guests = 15, spacing = 1.7f,  minNeeds = 2, maxNeeds = 2 },   // Wave 8
+            // composition (weights: Rooms, Drinks, Food, Relax, OceanView): every wave stresses another service;
+            // Relax opens after wave 3 and Ocean View after wave 6, so their weights matter from wave 4 / wave 7
+            new WaveConfig { guests = 5,  spacing = 3.0f,  minNeeds = 1, maxNeeds = 1, weights = new float[] { 1,    1,    1,    1,    1    } },   // Wave 1 – even mix
+            new WaveConfig { guests = 7,  spacing = 2.7f,  minNeeds = 1, maxNeeds = 1, weights = new float[] { 1,    1.5f, 1,    1,    1    } },   // Wave 2 – thirsty guests
+            new WaveConfig { guests = 8,  spacing = 2.55f, minNeeds = 1, maxNeeds = 2, weights = new float[] { 1,    1,    1.5f, 1,    1    } },   // Wave 3 – hungry guests
+            new WaveConfig { guests = 9,  spacing = 2.4f,  minNeeds = 1, maxNeeds = 2, weights = new float[] { 1,    1,    1,    1.5f, 1    } },   // Wave 4 – the Pool opens
+            new WaveConfig { guests = 10, spacing = 2.2f,  minNeeds = 1, maxNeeds = 2, weights = new float[] { 1.5f, 1,    1,    1,    1    } },   // Wave 5 – full Hotel
+            new WaveConfig { guests = 12, spacing = 2.05f, minNeeds = 1, maxNeeds = 2, weights = new float[] { 1,    1.5f, 1.5f, 1,    1    } },   // Wave 6 – bar and food rush
+            new WaveConfig { guests = 13, spacing = 1.85f, minNeeds = 1, maxNeeds = 2, weights = new float[] { 1,    1,    1,    1,    1.5f } },   // Wave 7 – Bungalows open
+            new WaveConfig { guests = 15, spacing = 1.7f,  minNeeds = 2, maxNeeds = 2, weights = new float[] { 1,    1,    1,    1,    1    } },   // Wave 8 – everything at once
         };
 
         /// <summary>Number of predefined waves (8 by default).</summary>
@@ -184,6 +186,24 @@ namespace IslandTycoon
             var w = Wave(index);
             int min = Mathf.Max(1, w.minNeeds), max = Mathf.Max(min, w.maxNeeds);
             return Mathf.Max(1, w.guests) * (min + max) * 0.5f;
+        }
+
+        /// <summary>
+        /// Share 0..1 of one need among the needs open in a wave (SCRUM-69): its weight in the wave
+        /// times the need's own weight, against the sum over the open needs.
+        /// </summary>
+        public float NeedShare(int index, int need, bool[] open)
+        {
+            var w = Wave(index);
+            float total = 0, mine = 0;
+            for (int n = 0; n < needs.Length && n < open.Length; n++)
+            {
+                if (!open[n]) continue;
+                float wn = (w.weights != null && n < w.weights.Length ? w.weights[n] : 1f) * Need(n).weight;
+                total += Mathf.Max(0.01f, wn);
+                if (n == need) mine = Mathf.Max(0.01f, wn);
+            }
+            return total <= 0 ? 0 : mine / total;
         }
 
         /// <summary>The 0-based wave is one of the predefined waves (not a repeat of the last one).</summary>
