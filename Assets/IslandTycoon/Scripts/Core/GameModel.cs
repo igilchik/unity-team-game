@@ -71,6 +71,10 @@ namespace IslandTycoon
         public bool WaveComplete => S.phase == GamePhase.WaveComplete;
         /// <summary>1-based number of the next / current wave.</summary>
         public int WaveNumber => S.waveIndex + 1;
+        /// <summary>Number of predefined waves of the game (SCRUM-67).</summary>
+        public int TotalWaves => Cfg.WaveCount;
+        /// <summary>Config of the current wave.</summary>
+        public WaveConfig CurrentWave => Cfg.Wave(S.waveIndex);
         public BuildingState B(int need) => S.buildings[need];
         public BuildingState B(NeedType need) => S.buildings[(int)need];
         public bool Exists(int need) => B(need).exists;

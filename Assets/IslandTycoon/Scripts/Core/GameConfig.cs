@@ -161,7 +161,24 @@ namespace IslandTycoon
         public IslandConfig island = new IslandConfig();
 
         [Header("Waves")]
-        public WaveConfig[] waves = { new WaveConfig() };
+        [Tooltip("Predefined waves of the game, Wave 1 to Wave 8. After the last one the last wave repeats.")]
+        public WaveConfig[] waves =
+        {
+            new WaveConfig(),   // Wave 1
+            new WaveConfig(),   // Wave 2
+            new WaveConfig(),   // Wave 3
+            new WaveConfig(),   // Wave 4
+            new WaveConfig(),   // Wave 5
+            new WaveConfig(),   // Wave 6
+            new WaveConfig(),   // Wave 7
+            new WaveConfig(),   // Wave 8
+        };
+
+        /// <summary>Number of predefined waves (8 by default).</summary>
+        public int WaveCount => waves == null ? 0 : waves.Length;
+
+        /// <summary>The 0-based wave is one of the predefined waves (not a repeat of the last one).</summary>
+        public bool IsPredefinedWave(int index) => index >= 0 && index < WaveCount;
 
         public const string ResourcePath = "IslandTycoon/GameConfig";
 
