@@ -88,6 +88,7 @@ namespace IslandTycoon
         public float satisfaction;   // final Wave Satisfaction 0..100
         public int stars;            // final rating 0..3
         public WaveReward reward;
+        public bool rewardsClaimed;  // the reward was already taken (it can be taken only once)
         public List<NeedStats> stats = new List<NeedStats>();   // copy of every need's numbers
     }
 

@@ -14,6 +14,7 @@ namespace IslandTycoon
     /// SCRUM-100: connected to the finished wave: opens on GameModel.WaveEnded and shows only the
     /// snapshot of that wave (GameModel.LastResult), so nothing on it changes afterwards.
     /// SCRUM-106: CLAIM REWARDS adds the shown rewards to the player and closes the screen.
+    /// SCRUM-107: the button works only once per wave; claimed rewards show CLAIMED and a disabled button.
     /// </summary>
     public class WaveCompleteView : MonoBehaviour
     {
@@ -156,6 +157,7 @@ namespace IslandTycoon
             UIFactory.SetText(_reward[0], "+" + r.reward.coins);
             UIFactory.SetText(_reward[1], "+" + r.reward.energy);
             UIFactory.SetText(_reward[2], "+" + r.reward.resortValue);
+            UpdateClaimButton();
 
             // one row per need guests asked for, stacked from the top
             int row = 0;
@@ -179,11 +181,21 @@ namespace IslandTycoon
 
         public void Close() => UIFactory.Close(_modal);
 
-        /// <summary>Takes the rewards of the shown wave and closes the screen.</summary>
+        /// <summary>Takes the rewards of the shown wave and closes the screen (only the first press counts).</summary>
         public void Claim()
         {
-            _m.ClaimRewards();
+            if (_result == null || _result.rewardsClaimed || !_m.ClaimRewards()) { UpdateClaimButton(); return; }
+            UpdateClaimButton();
             Close();
+        }
+
+        /// <summary>CLAIM REWARDS while the reward is free, CLAIMED (disabled) after it was taken.</summary>
+        void UpdateClaimButton()
+        {
+            bool claimed = _result != null && _result.rewardsClaimed;
+            _continue.interactable = !claimed;
+            var label = _continue.GetComponentInChildren<Text>();
+            if (label != null) UIFactory.SetText(label, claimed ? "CLAIMED" : "CLAIM REWARDS");
         }
     }
 }

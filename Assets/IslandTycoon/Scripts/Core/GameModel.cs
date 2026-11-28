@@ -318,16 +318,22 @@ namespace IslandTycoon
             return change;
         }
 
-        /// <summary>There is a finished wave whose rewards can be taken.</summary>
-        public bool CanClaimRewards => WaveComplete && LastResult != null;
+        /// <summary>There is a finished wave whose rewards were not taken yet.</summary>
+        public bool CanClaimRewards => WaveComplete && LastResult != null && !LastResult.rewardsClaimed;
+
+        /// <summary>The rewards of the last finished wave were already taken.</summary>
+        public bool RewardsAlreadyClaimed => LastResult != null && LastResult.rewardsClaimed;
 
         /// <summary>
         /// Claim Rewards (SCRUM-106): adds the rewards of the finished wave (from its result snapshot)
         /// to the player: Coins, Energy and Resort Value. Refused while no wave is complete.
+        /// SCRUM-107: the same reward can be taken only once; the result is marked as claimed
+        /// before anything is added, so a second call (double tap, event loop) gets nothing.
         /// </summary>
         public bool ClaimRewards()
         {
             if (!CanClaimRewards) return false;
+            LastResult.rewardsClaimed = true;
             var r = LastResult.reward;
             AddCoins(r.coins);
             AddEnergy(r.energy);
