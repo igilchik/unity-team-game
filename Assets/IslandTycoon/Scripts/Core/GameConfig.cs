@@ -164,18 +164,27 @@ namespace IslandTycoon
         [Tooltip("Predefined waves of the game, Wave 1 to Wave 8. After the last one the last wave repeats.")]
         public WaveConfig[] waves =
         {
-            new WaveConfig(),   // Wave 1
-            new WaveConfig(),   // Wave 2
-            new WaveConfig(),   // Wave 3
-            new WaveConfig(),   // Wave 4
-            new WaveConfig(),   // Wave 5
-            new WaveConfig(),   // Wave 6
-            new WaveConfig(),   // Wave 7
-            new WaveConfig(),   // Wave 8
+            // volume of needs: more guests, closer together, later with 2 needs each
+            new WaveConfig { guests = 5,  spacing = 3.0f,  minNeeds = 1, maxNeeds = 1 },   // Wave 1
+            new WaveConfig { guests = 7,  spacing = 2.7f,  minNeeds = 1, maxNeeds = 1 },   // Wave 2
+            new WaveConfig { guests = 8,  spacing = 2.55f, minNeeds = 1, maxNeeds = 2 },   // Wave 3
+            new WaveConfig { guests = 9,  spacing = 2.4f,  minNeeds = 1, maxNeeds = 2 },   // Wave 4
+            new WaveConfig { guests = 10, spacing = 2.2f,  minNeeds = 1, maxNeeds = 2 },   // Wave 5
+            new WaveConfig { guests = 12, spacing = 2.05f, minNeeds = 1, maxNeeds = 2 },   // Wave 6
+            new WaveConfig { guests = 13, spacing = 1.85f, minNeeds = 1, maxNeeds = 2 },   // Wave 7
+            new WaveConfig { guests = 15, spacing = 1.7f,  minNeeds = 2, maxNeeds = 2 },   // Wave 8
         };
 
         /// <summary>Number of predefined waves (8 by default).</summary>
         public int WaveCount => waves == null ? 0 : waves.Length;
+
+        /// <summary>Expected number of requests (needs) in a 0-based wave: guests x average needs per guest (SCRUM-68).</summary>
+        public float RequestVolume(int index)
+        {
+            var w = Wave(index);
+            int min = Mathf.Max(1, w.minNeeds), max = Mathf.Max(min, w.maxNeeds);
+            return Mathf.Max(1, w.guests) * (min + max) * 0.5f;
+        }
 
         /// <summary>The 0-based wave is one of the predefined waves (not a repeat of the last one).</summary>
         public bool IsPredefinedWave(int index) => index >= 0 && index < WaveCount;
