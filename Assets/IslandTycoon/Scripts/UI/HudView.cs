@@ -16,6 +16,7 @@ namespace IslandTycoon
     /// SCRUM-78: free workers counter (bottom left) follows every worker move.
     /// SCRUM-52: Wave Satisfaction bar with a smiley under the plaque during the wave.
     /// SCRUM-103: the Coins pill bumps when coins are added to the player.
+    /// SCRUM-104: ... and the Energy pill when energy is added.
     /// </summary>
     public class HudView : MonoBehaviour
     {
@@ -29,8 +30,8 @@ namespace IslandTycoon
         Image _satFace;
         Text _satText;
         const float SatWidth = 430, SatHeight = 72;
-        RectTransform _coinsPill;
-        float _coinsBump = -1f;   // time of the last bump
+        RectTransform _coinsPill, _energyPill;
+        float _coinsBump = -1f, _energyBump = -1f;   // time of the last bump
 
         public Text TitleText => _title;
         public Text StatusText => _status;
@@ -86,7 +87,9 @@ namespace IslandTycoon
                 new Vector2(1, 0), new Vector2(-24, 20), new Vector2(370, 0), () => { if (_m.CanStartWave) onStartWave?.Invoke(); });
 
             _coinsPill = (RectTransform)_coins.transform.parent.parent;
+            _energyPill = (RectTransform)_energy.transform.parent.parent;
             _m.CoinsAdded += OnCoinsAdded;
+            _m.EnergyAdded += OnEnergyAdded;
             _m.Changed += Refresh;
             Refresh();
         }
@@ -96,11 +99,17 @@ namespace IslandTycoon
             if (_m == null) return;
             _m.Changed -= Refresh;
             _m.CoinsAdded -= OnCoinsAdded;
+            _m.EnergyAdded -= OnEnergyAdded;
         }
 
         void OnCoinsAdded(int amount) => _coinsBump = Time.unscaledTime;
+        void OnEnergyAdded(int amount) => _energyBump = Time.unscaledTime;
 
-        void Update() => Bump(_coinsPill, _coinsBump);
+        void Update()
+        {
+            Bump(_coinsPill, _coinsBump);
+            Bump(_energyPill, _energyBump);
+        }
 
         /// <summary>Short scale bump of a pill after its value went up.</summary>
         static void Bump(RectTransform pill, float since)
