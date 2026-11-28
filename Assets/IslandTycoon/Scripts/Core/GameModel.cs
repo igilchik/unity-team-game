@@ -253,27 +253,14 @@ namespace IslandTycoon
         public int WaveStars => WaveComplete ? Cfg.Stars(S.satisfaction) : 0;
 
         /// <summary>
-        /// Rewards of the completed wave (SCRUM-97): coins for every served request plus a satisfaction bonus
-        /// that grows with the wave number, energy per star, Resort Value per served request and per star.
-        /// Only shown here; they are added to the resort when the player claims them.
+        /// Rewards of the completed wave (SCRUM-97, calculation SCRUM-102 in RewardCalculator).
+        /// Empty while no wave is complete; added to the resort when the player claims them.
         /// </summary>
-        public WaveReward WaveRewards()
-        {
-            var r = new WaveReward();
-            if (!WaveComplete) return r;
-            int served = 0, coins = 0;
-            for (int n = 0; n < S.stats.Count; n++)
-            {
-                served += S.stats[n].served;
-                coins += S.stats[n].served * Math.Max(0, Cfg.Need(n).coinsPerServe);
-            }
-            float bonus = S.satisfaction * Cfg.satisfactionCoinBonus * (1f + S.waveIndex * Cfg.bonusGrowthPerWave);
-            int stars = WaveStars;
-            r.coins = coins + (int)Math.Round(bonus);
-            r.energy = stars * Math.Max(0, Cfg.energyPerStar);
-            r.resortValue = served * Math.Max(0, Cfg.valuePerServe) + stars * Math.Max(0, Cfg.valuePerStar);
-            return r;
-        }
+        public WaveReward WaveRewards() =>
+            WaveComplete ? RewardCalculator.Calculate(Cfg, S.stats, S.satisfaction, S.waveIndex) : new WaveReward();
+
+        /// <summary>Total of a reward, for quick checks (empty reward = 0).</summary>
+        public static int RewardTotal(WaveReward r) => r.coins + r.energy + r.resortValue;
 
         /// <summary>The need was requested in the finished wave and its guests were served well (SCRUM-98).</summary>
         public bool ServiceWorkedWell(int need) => WorkedWell(Stats(need));
