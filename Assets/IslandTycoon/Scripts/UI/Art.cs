@@ -73,6 +73,10 @@ namespace IslandTycoon
             return string.IsNullOrEmpty(icon) ? "UI/Icons/icon_help" : icon;
         }
 
+        /// <summary>Smiley for a satisfaction 0..100.</summary>
+        public static string FaceIcon(float satisfaction) =>
+            satisfaction >= 75 ? "UI/Icons/icon_face_happy" : satisfaction >= 45 ? "UI/Icons/icon_face_neutral" : "UI/Icons/icon_face_sad";
+
         /// <summary>Building art; locked plots show a fence or jungle.</summary>
         public static Sprite Building(GameConfig cfg, int need, bool unlocked, bool jungleLock)
         {

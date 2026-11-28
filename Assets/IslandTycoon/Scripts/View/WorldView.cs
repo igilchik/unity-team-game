@@ -74,9 +74,11 @@ namespace IslandTycoon
         public void OnPointerClick(PointerEventData e) => Controller.SelectBuilding(Need);
 
         public int Need;
-        public SpriteRenderer Body, Warning;
+        public SpriteRenderer Body, Warning, EmptyPost;
         public readonly List<Transform> Workers = new List<Transform>();
         public float Top = 2f;
+        /// <summary>Time the building last received a worker (short bounce), -1 = never.</summary>
+        public float StaffedAt = -1f;
     }
 
     /// <summary>
@@ -85,6 +87,7 @@ namespace IslandTycoon
     /// SCRUM-46: a pulsing warning sign above a building with a bottleneck.
     /// SCRUM-75: the selected building gently pulses.
     /// SCRUM-78: workers stand next to their building, free workers by the pier; every move shows at once.
+    /// SCRUM-85: the building a worker moved to bounces and drops its empty post in the same frame.
     /// </summary>
     public class WorldView : MonoBehaviour
     {
@@ -98,7 +101,21 @@ namespace IslandTycoon
         public void Build(GameController c)
         {
             _c = c;
+            M.BuildingStaffed += OnStaffed;
             Rebuild();
+        }
+
+        void OnDestroy()
+        {
+            if (_c != null && _c.Model != null) _c.Model.BuildingStaffed -= OnStaffed;
+        }
+
+        /// <summary>SCRUM-85: the new building shows its worker at once.</summary>
+        void OnStaffed(int need)
+        {
+            if (!_plots.TryGetValue(need, out var pv)) return;
+            pv.StaffedAt = Time.time;
+            SyncPlot(pv, Time.time);
         }
 
         /// <summary>(Re)creates everything for the island.</summary>
@@ -153,6 +170,14 @@ namespace IslandTycoon
             pv.Body = Art.MakeSprite("Body", root.transform, null, Layout.Order(Layout.PlotBase(need).y));
             pv.Warning = Art.MakeSprite("Warning", root.transform, "UI/Icons/icon_warning", 9000);
             pv.Warning.gameObject.SetActive(false);
+            // grey silhouette on the worker spot: nobody works here
+            var post = new GameObject("EmptyPost").transform;
+            post.SetParent(_content, false);
+            post.localPosition = Layout.WorkerSpot(need, 0);
+            pv.EmptyPost = Art.MakeSprite("Body", post, "Characters/Worker/worker_front", Layout.Order(Layout.PlotBase(need).y) + 4);
+            Art.FitFeet(pv.EmptyPost, WorkerHeight);
+            pv.EmptyPost.color = new Color(0.15f, 0.15f, 0.2f, 0.35f);
+            post.gameObject.SetActive(false);
             RefreshPlotArt(pv);
             return pv;
         }
@@ -183,6 +208,8 @@ namespace IslandTycoon
         void SyncPlot(PlotView pv, float t)
         {
             float sel = _c.Selected == pv.Need ? 1f + Mathf.Sin(t * 5f) * 0.015f : 1f;
+            float since = pv.StaffedAt < 0 ? 1f : t - pv.StaffedAt;
+            if (since < 0.35f) sel *= 1f + Mathf.Sin(since / 0.35f * Mathf.PI) * 0.06f;
             pv.transform.localScale = new Vector3(sel, sel, 1);
 
             bool bottleneck = M.IsBottleneck(pv.Need);
@@ -193,6 +220,11 @@ namespace IslandTycoon
                 pv.Warning.transform.localScale = new Vector3(k, k, 1);
                 pv.Warning.transform.localPosition = new Vector3(0, pv.Top + 0.3f, 0);
             }
+
+            // a building left without a worker shows an empty post
+            bool unstaffed = M.IsUnstaffed(pv.Need);
+            var postGo = pv.EmptyPost.transform.parent.gameObject;
+            if (postGo.activeSelf != unstaffed) postGo.SetActive(unstaffed);
 
             // assigned workers stand in front of their building
             var b = M.B(pv.Need);

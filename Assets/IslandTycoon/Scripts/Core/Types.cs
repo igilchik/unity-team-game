@@ -16,8 +16,10 @@ namespace IslandTycoon
     /// <summary>
     /// Resort state machine. AWAITING_WAVE: the player prepares the resort before the next wave.
     /// WAVE_ACTIVE: guests are coming and the resort serves them.
+    /// WAVE_FINISHING: no more guests come, the resort serves the ones still in the queues.
+    /// WAVE_COMPLETE: every request of the wave is resolved, the queues are empty.
     /// </summary>
-    public enum GamePhase { AwaitingWave = 0, WaveActive = 1 }
+    public enum GamePhase { AwaitingWave = 0, WaveActive = 1, WaveFinishing = 2, WaveComplete = 3 }
 
     [Serializable]
     public class BuildingState
@@ -61,7 +63,32 @@ namespace IslandTycoon
     {
         public int requested;   // requests for this need in the wave
         public int served;      // requests already served
-        public int Remaining => requested - served;
+        public float score;     // sum of the satisfaction scores of served requests (0..1 each)
+        public int failed;      // requests lost: the guest ran out of patience (score 0)
+        public int Resolved => served + failed;
+        public int Remaining => requested - served - failed;
+        /// <summary>Average score of the resolved requests 0..1 (1 when none resolved yet).</summary>
+        public float AvgScore => Resolved == 0 ? 1f : score / Resolved;
+    }
+
+    /// <summary>What the player earns for a completed wave.</summary>
+    [Serializable]
+    public struct WaveReward
+    {
+        public int coins;
+        public int energy;
+        public int resortValue;
+    }
+
+    /// <summary>Snapshot of a finished wave, taken when it reaches WAVE_COMPLETE (SCRUM-100).</summary>
+    [Serializable]
+    public class WaveResult
+    {
+        public int wave;             // 1-based number of the finished wave
+        public float satisfaction;   // final Wave Satisfaction 0..100
+        public int stars;            // final rating 0..3
+        public WaveReward reward;
+        public List<NeedStats> stats = new List<NeedStats>();   // copy of every need's numbers
     }
 
     /// <summary>Whole state of the resort.</summary>
@@ -79,8 +106,10 @@ namespace IslandTycoon
 
         // active wave
         public float waveTime;       // seconds since the wave started
+        public float satisfaction = 100f;   // live Wave Satisfaction 0..100
         public List<GuestPlan> plans = new List<GuestPlan>();
         public int nextPlan;         // next guest to arrive
+        public bool arrivalsOpen;    // new guests (and their requests) can still come
         public List<Guest> guests = new List<Guest>();
         public int nextGuestId;
         public List<NeedStats> stats = new List<NeedStats>();

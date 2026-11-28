@@ -28,6 +28,11 @@ namespace IslandTycoon
             Section("SCRUM-40 Guest needs generation", () => NeedsGeneration(cfg));
             Section("SCRUM-47 Wave Needs Panel during a wave", () => NeedsPanelDuringWave(cfg));
             Section("SCRUM-79 Moving workers between buildings", () => WorkerMoves(cfg));
+            Section("SCRUM-53 Satisfaction and bottlenecks", () => SatisfactionBottleneck(cfg));
+            Section("SCRUM-59 Wave end with a backlog", () => WaveEndBacklog());
+            Section("SCRUM-86 Moving workers costs no currency", () => FreeMoves(cfg));
+            Section("SCRUM-92 Building performance with and without a worker", () => WorkerPerformance());
+            Section("SCRUM-100 Wave Complete screen shows the finished wave", () => WaveCompleteScreen());
 
             _sb.Insert(0, _fails == 0 ? "ALL CHECKS PASSED\n" : $"{_fails} CHECK(S) FAILED\n");
             return _sb.ToString();
@@ -244,13 +249,13 @@ namespace IslandTycoon
                     for (int n = 0; n < Needs.Count; n++)
                         if (m.IsNeedActive(n)) queueShown &= panel.RowValue(n).Contains($"{m.QueueCount(n)} wait");
                 }
-                Check(m.AllGuestsDone, "every guest of the wave is served");
+                Check(m.AllGuestsDone, "every guest of the wave is resolved");
                 Check(queueShown, "waiting guests are always shown");
-                bool allServed = true;
+                bool allResolved = true;
                 for (int n = 0; n < Needs.Count; n++)
-                    if (m.IsNeedActive(n)) allServed &= m.Stats(n).served == m.Stats(n).requested
-                                                     && panel.RowValue(n).Contains($"{m.Stats(n).requested}/{m.Stats(n).requested}");
-                Check(allServed, "panel ends with every request served");
+                    if (m.IsNeedActive(n)) allResolved &= m.Stats(n).Resolved == m.Stats(n).requested
+                                                       && panel.RowValue(n).Contains($"{m.Stats(n).served}/{m.Stats(n).requested}");
+                Check(allResolved, "panel ends with every request served or lost");
             }
             finally { Dispose(go); }
 
@@ -334,6 +339,291 @@ namespace IslandTycoon
                 Check(!panel.Panel.gameObject.activeSelf, "panel closes when nothing is selected");
             }
             finally { Dispose(go); }
+        }
+    
+
+        // ------------------------------------------------------------------ SCRUM-53
+
+        static void SatisfactionBottleneck(GameConfig cfg)
+        {
+            var m0 = new GameModel(cfg);
+            Check(Mathf.Approximately(m0.RequestScore(0), 1f), "fast service = full score");
+            Check(Mathf.Abs(m0.RequestScore(cfg.patience) - cfg.lateScore) < 0.001f, "late service = lateScore");
+            Check(m0.RequestScore(cfg.patience * 0.8f) < 1f && m0.RequestScore(cfg.patience * 0.8f) > cfg.lateScore,
+                "score falls the longer a guest waits");
+
+            // calm wave: one guest at a time, nobody waits
+            var calm = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            var rush = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            var go = new GameObject("SelfTest_Satisfaction");
+            try
+            {
+                calm.waves = new[] { new WaveConfig { guests = 3, spacing = 20f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+                var mc = new GameModel(calm);
+                mc.StartWave();
+                for (int i = 0; i < 900; i++) mc.Tick(0.1f);
+                Check(!mc.IsBottleneck((int)NeedType.Rooms), "no bottleneck in a calm wave");
+                Check(mc.S.satisfaction >= 99.9f && mc.WaveSatisfaction() >= 99.9f, "no waiting = 100 % satisfaction");
+
+                // rush wave: 8 guests at the Hotel at once
+                rush.waves = new[] { new WaveConfig { guests = 8, spacing = 0.1f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+                var mr = new GameModel(rush);
+                var hud = go.AddComponent<HudView>();
+                hud.Build(mr);
+                mr.StartWave();
+                Check(hud.SatisfactionBar.gameObject.activeSelf && hud.SatisfactionText.text.Contains("100%"), "bar shows 100 % at the start");
+                for (int i = 0; i < 30; i++) mr.Tick(0.1f);
+                Check(mr.IsBottleneck((int)NeedType.Rooms), "rush creates a bottleneck");
+                float atBottleneck = mr.S.satisfaction;
+                for (int i = 0; i < 60; i++) mr.Tick(0.1f);
+                Check(mr.S.satisfaction < atBottleneck && mr.S.satisfaction < 100f, "satisfaction falls while the queue waits");
+                for (int i = 0; i < 1200; i++) mr.Tick(0.1f);
+                Check(mr.Stats((int)NeedType.Rooms).failed > 0, "guests that wait too long are lost");
+                Check(mr.WaveSatisfaction() < 50f, "a long bottleneck ruins the satisfaction");
+                Check(hud.SatisfactionText.text.Contains($"{Mathf.RoundToInt(mr.S.satisfaction)}%"), "bar follows the satisfaction");
+                Check(hud.SatisfactionFace.sprite == Art.Get(Art.FaceIcon(mr.S.satisfaction)), "smiley follows the satisfaction");
+            }
+            finally { Dispose(go); Dispose(calm); Dispose(rush); }
+        }
+    
+
+        // ------------------------------------------------------------------ SCRUM-59
+
+        static void WaveEndBacklog()
+        {
+            var rush = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            var timed = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            var go = new GameObject("SelfTest_WaveEnd");
+            try
+            {
+                // 8 guests reach the Hotel at once: a long backlog after the last arrival
+                rush.waves = new[] { new WaveConfig { guests = 8, spacing = 0.1f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+                var m = new GameModel(rush);
+                var hud = go.AddComponent<HudView>();
+                hud.Build(m);
+                int closed = 0, ended = 0;
+                m.ArrivalsClosed += () => closed++;
+                m.WaveEnded += () => ended++;
+                m.StartWave();
+                Check(m.ArrivalsOpen && m.Phase == GamePhase.WaveActive, "arrivals open at the start");
+                for (int i = 0; i < 30; i++) m.Tick(0.1f);
+                Check(!m.ArrivalsOpen && closed == 1 && m.GuestsToCome == 0, "arrivals close after the last guest");
+                Check(m.Phase == GamePhase.WaveFinishing, "WAVE_ACTIVE -> WAVE_FINISHING");
+                Check(m.QueuedRequests() > 0 && m.RemainingRequests() > 0, "requests are still waiting in the queue");
+                Check(!m.StartWave(), "no new wave while the last guests are served");
+                Check(hud.StatusText.text.Contains("finishing") && hud.StatusText.text.Contains($"{m.RemainingRequests()} requests left"),
+                    "HUD shows the remaining requests");
+
+                bool neverEarly = true;
+                int guard = 0;
+                while (!m.WaveComplete && guard++ < 5000)
+                {
+                    neverEarly &= m.RemainingRequests() > 0 || m.QueuedRequests() == 0;
+                    m.Tick(0.1f);
+                    if (m.WaveComplete) break;
+                    neverEarly &= m.RemainingRequests() > 0;   // still running = something is left
+                }
+                Check(neverEarly, "the wave never ends while requests are left");
+                Check(m.WaveComplete && ended == 1, "the wave ends once the queues are empty");
+                var st = m.Stats((int)NeedType.Rooms);
+                Check(st.Resolved == st.requested && st.requested == 8, "every request served or lost");
+                Check(Mathf.Abs(m.S.satisfaction - m.WaveSatisfaction()) < 0.001f, "final satisfaction is fixed at the end");
+                float t = m.S.waveTime;
+                m.Tick(1f);
+                Check(m.S.waveTime == t && ended == 1, "nothing runs after the wave ended");
+                Check(hud.StatusText.text.Contains("complete"), "HUD shows the completed wave");
+
+                // arrivals can also stop after a time limit: guests that did not come are dropped
+                timed.waves = new[] { new WaveConfig { guests = 10, spacing = 1f, duration = 4.5f } };
+                var mt = new GameModel(timed);
+                mt.StartWave();
+                for (int i = 0; i < 50; i++) mt.Tick(0.1f);
+                int requested = 0;
+                foreach (var s in mt.S.stats) requested += s.requested;
+                Check(!mt.ArrivalsOpen && mt.S.plans.Count == 5, "arrivals stop after the wave duration (5 of 10 guests came)");
+                Check(requested == 5, "requests of guests that did not come are dropped");
+            }
+            finally { Dispose(go); Dispose(rush); Dispose(timed); }
+        }
+
+        // ------------------------------------------------------------------ SCRUM-86
+
+        /// <summary>Every kind of worker move (assign, take out, MOVE, + from another building) keeps coins and energy.</summary>
+        static void FreeMoves(GameConfig cfg)
+        {
+            int rooms = (int)NeedType.Rooms, drinks = (int)NeedType.Drinks, food = (int)NeedType.Food;
+            var m = new GameModel(cfg);
+            Check(cfg.workerMoveCost == 0 && m.MoveCost == 0, "a move costs 0 coins");
+            int coins = m.S.coins, energy = m.S.energy;
+
+            Check(m.UnassignWorker(rooms) && m.AssignWorker(drinks), "take out + assign before the wave");
+            Check(m.TransferWorker(drinks, rooms), "instant MOVE before the wave");
+            Check(m.S.coins == coins && m.S.energy == energy, "no coins or energy spent before the wave");
+
+            m.StartWave();
+            for (int i = 0; i < 20; i++) m.Tick(0.1f);
+            Check(m.TransferWorker(food, drinks) && m.PullWorker(food), "MOVE and + during the wave");
+            Check(m.S.coins == coins && m.S.energy == energy, "no coins or energy spent during the wave");
+
+            // the player can move workers even with an empty wallet
+            m.S.coins = 0;
+            m.S.energy = 0;
+            Check(m.CanAffordMove && m.TransferWorker(rooms, food), "moves work with 0 coins");
+            Check(m.S.coins == 0 && m.S.energy == 0, "the wallet stays at 0");
+            Check(m.AssignedWorkers + m.FreeWorkers == m.S.totalWorkers, "no worker lost by the free moves");
+
+            // the UI says so too
+            var go = new GameObject("SelfTest_FreeMoves");
+            try
+            {
+                var panel = go.AddComponent<WorkerPanel>();
+                var hud = go.AddComponent<HudView>();
+                hud.Build(m);
+                panel.Build(m, hud.Root, () => drinks, d => { }, () => { }, () => { }, () => false);
+                panel.Refresh();
+                Check(panel.FreeText.text.Contains("moves are free"), "worker panel says moves are free");
+                Check(panel.MoveTo.interactable, "MOVE is enabled with 0 coins");
+            }
+            finally { Dispose(go); }
+        }
+
+        // ------------------------------------------------------------------ SCRUM-92
+
+        /// <summary>Seconds of wave time until the only Hotel guest of the wave is served.</summary>
+        static float TimeToServe(GameModel m, int need, Action<GameModel> atHalf = null)
+        {
+            m.StartWave();
+            bool half = false;
+            for (int i = 0; i < 5000 && m.Stats(need).served == 0; i++)
+            {
+                m.Tick(0.05f);
+                if (!half && atHalf != null)
+                    foreach (var g in m.S.guests)
+                        if (g.stage == GuestStage.InService && g.progress >= 0.5f) { half = true; atHalf(m); break; }
+            }
+            return m.Stats(need).served == 1 ? m.S.waveTime : float.PositiveInfinity;
+        }
+
+        static void WorkerPerformance()
+        {
+            int rooms = (int)NeedType.Rooms, drinks = (int)NeedType.Drinks;
+            var cfg = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            try
+            {
+                cfg.patience = 1000f;   // nobody leaves: we only measure the speed
+                cfg.waves = new[] { new WaveConfig { guests = 1, spacing = 1f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+
+                var m0 = new GameModel(cfg);
+                Check(Mathf.Approximately(m0.WorkerSpeed(0), cfg.noWorkerFactor), "no worker = noWorkerFactor speed");
+                Check(Mathf.Approximately(m0.WorkerSpeed(1), 1f), "1 worker = normal speed");
+                Check(Mathf.Approximately(m0.WorkerSpeed(2), 1f + cfg.extraWorkerBonus), "2 workers = faster");
+                Check(m0.WorkerSpeed(0) < m0.WorkerSpeed(1) && m0.WorkerSpeed(1) < m0.WorkerSpeed(3), "more workers, more speed");
+                Check(Mathf.Approximately(m0.ServiceTime(rooms), cfg.Need(rooms).baseServiceTime), "1 worker serves in baseServiceTime");
+                Check(m0.Speed((int)NeedType.Relax) == 0f, "a locked building does not serve");
+
+                // the same guest, three staffing variants
+                var one = new GameModel(cfg);
+                float tOne = TimeToServe(one, rooms);
+
+                var none = new GameModel(cfg);
+                none.UnassignWorker(rooms);
+                Check(none.IsUnstaffed(rooms) && none.ServiceTime(rooms) > one.ServiceTime(rooms), "Hotel without a worker is slower");
+                float tNone = TimeToServe(none, rooms);
+
+                var two = new GameModel(cfg);
+                two.UnassignWorker(drinks);
+                two.AssignWorker(rooms);
+                float tTwo = TimeToServe(two, rooms);
+
+                Check(!float.IsInfinity(tNone), "a building without a worker still serves (slowly)");
+                Check(tNone > tOne && tOne > tTwo, $"service time: no worker {tNone:0.0} s > 1 worker {tOne:0.0} s > 2 workers {tTwo:0.0} s");
+                float walk = cfg.walkTime;
+                float ratio = (tNone - walk) / Mathf.Max(0.01f, tOne - walk);
+                Check(Mathf.Abs(ratio - 1f / cfg.noWorkerFactor) < 0.3f, $"no worker is {ratio:0.0}x slower (expected {1f / cfg.noWorkerFactor:0.0}x)");
+
+                // the worker leaves in the middle of the service: the guest keeps his progress, the rest is slow
+                var moved = new GameModel(cfg);
+                float progressAtMove = -1;
+                float tMoved = TimeToServe(moved, rooms, mm =>
+                {
+                    foreach (var g in mm.S.guests) if (g.stage == GuestStage.InService) progressAtMove = g.progress;
+                    mm.TransferWorker(rooms, drinks);
+                    foreach (var g in mm.S.guests) if (g.stage == GuestStage.InService) Check(Mathf.Approximately(g.progress, progressAtMove), "guest keeps the service progress after the move");
+                });
+                Check(progressAtMove >= 0.5f && tMoved > tOne && tMoved < tNone, "worker moved away mid-service: slower than 1 worker, faster than none");
+            }
+            finally { Dispose(cfg); }
+        }
+
+        // ------------------------------------------------------------------ SCRUM-100
+
+        static void WaveCompleteScreen()
+        {
+            var cfg = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            var go = new GameObject("SelfTest_WaveComplete");
+            try
+            {
+                // a rush at the Hotel: some guests are lost, so the Hotel needs improvement
+                cfg.waves = new[] { new WaveConfig { guests = 8, spacing = 0.1f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+                var m = new GameModel(cfg);
+                var hud = go.AddComponent<HudView>();
+                hud.Build(m);
+                var screen = go.AddComponent<WaveCompleteView>();
+                screen.Build(m, hud.Root);
+                Check(!screen.IsOpen && m.LastResult == null, "screen is closed before any wave ended");
+
+                m.StartWave();
+                for (int i = 0; i < 50; i++) m.Tick(0.1f);
+                Check(!screen.IsOpen, "screen stays closed during the wave");
+                for (int i = 0; i < 5000 && !m.WaveComplete; i++) m.Tick(0.1f);
+
+                var r = m.LastResult;
+                Check(m.WaveComplete && r != null && r.wave == 1, "the finished wave leaves a result");
+                Check(screen.IsOpen && screen.Result == r, "screen opens by itself with that result");
+                Check(screen.TitleText.text == "WAVE 1 COMPLETE", "title names the wave");
+                Check(r.stars == cfg.Stars(r.satisfaction) && screen.StarsShown == r.stars, $"{r.stars} star(s) for {r.satisfaction:0} % satisfaction");
+                Check(screen.SatisfactionText.text.Contains($"{Mathf.RoundToInt(r.satisfaction)}%"), "screen shows the reached satisfaction");
+                Check(screen.SatisfactionFace.sprite == Art.Get(Art.FaceIcon(r.satisfaction)), "smiley matches the satisfaction");
+
+                var w = m.WaveRewards();
+                Check(r.reward.coins == w.coins && r.reward.coins > 0, "coins reward is shown");
+                Check(screen.CoinsReward.text == "+" + r.reward.coins && screen.EnergyReward.text == "+" + r.reward.energy
+                      && screen.ValueReward.text == "+" + r.reward.resortValue, "rewards on the screen match the result");
+                Check(m.S.coins == cfg.startCoins, "rewards are only shown, not added yet");
+
+                int rooms = (int)NeedType.Rooms;
+                Check(screen.RowVisible(rooms) && !screen.RowVisible((int)NeedType.Drinks), "only requested services have a row");
+                Check(screen.RowCount(rooms) == $"{r.stats[rooms].served}/{r.stats[rooms].requested}", "row shows served / requested");
+                Check(r.stats[rooms].failed > 0 && screen.RowState(rooms).StartsWith("needs improvement") && screen.RowState(rooms).Contains("lost"),
+                    "Hotel with lost guests needs improvement");
+
+                // the snapshot does not change any more
+                m.S.stats[rooms].served += 100;
+                m.Tick(0.1f);
+                Check(r.stats[rooms].served != m.S.stats[rooms].served && screen.RowCount(rooms) == $"{r.stats[rooms].served}/{r.stats[rooms].requested}",
+                    "screen keeps the finished wave's numbers");
+
+                screen.ContinueButton.onClick.Invoke();
+                Check(!screen.IsOpen, "CONTINUE closes the screen");
+                m.NotifyChanged();
+                Check(!screen.IsOpen, "the closed screen does not open again for the same wave");
+
+                // a calm wave: every service worked well
+                var calm = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+                try
+                {
+                    calm.waves = new[] { new WaveConfig { guests = 3, spacing = 20f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+                    var mc = new GameModel(calm);
+                    mc.StartWave();
+                    for (int i = 0; i < 5000 && !mc.WaveComplete; i++) mc.Tick(0.1f);
+                    var screen2 = go.AddComponent<WaveCompleteView>();
+                    screen2.Build(mc, hud.Root);
+                    Check(screen2.IsOpen && screen2.StarsShown == 3, "calm wave: 3 stars (screen built after the wave also opens)");
+                    Check(screen2.RowState(rooms) == "worked well", "calm wave: Hotel worked well");
+                }
+                finally { Dispose(calm); }
+            }
+            finally { Dispose(go); Dispose(cfg); }
         }
     }
 }

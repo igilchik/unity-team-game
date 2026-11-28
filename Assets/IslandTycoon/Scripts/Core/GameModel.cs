@@ -15,8 +15,14 @@ namespace IslandTycoon
         /// <summary>Raised after every change of the game state; the UI refreshes from it.</summary>
         public event Action Changed;
         public event Action WaveStarted;
+        /// <summary>No more new guests / requests in this wave.</summary>
+        public event Action ArrivalsClosed;
+        /// <summary>The wave is over: no new guests and every queue is empty.</summary>
+        public event Action WaveEnded;
         /// <summary>Workers of a building changed (need).</summary>
         public event Action<int> WorkersMoved;
+        /// <summary>A building received a worker (assigned or moved in); its state is already updated.</summary>
+        public event Action<int> BuildingStaffed;
 
         public GameModel(GameConfig cfg)
         {
@@ -59,6 +65,10 @@ namespace IslandTycoon
         public GamePhase Phase => S.phase;
         public bool AwaitingWave => S.phase == GamePhase.AwaitingWave;
         public bool WaveActive => S.phase == GamePhase.WaveActive;
+        public bool WaveFinishing => S.phase == GamePhase.WaveFinishing;
+        /// <summary>A wave is running: guests arrive (WAVE_ACTIVE) or the last ones are served (WAVE_FINISHING).</summary>
+        public bool InWave => S.phase == GamePhase.WaveActive || S.phase == GamePhase.WaveFinishing;
+        public bool WaveComplete => S.phase == GamePhase.WaveComplete;
         /// <summary>1-based number of the next / current wave.</summary>
         public int WaveNumber => S.waveIndex + 1;
         public BuildingState B(int need) => S.buildings[need];
@@ -76,6 +86,85 @@ namespace IslandTycoon
         public int FreeWorkers => S.totalWorkers - AssignedWorkers;
 
         public int Workers(int need) => B(need).workers;
+
+        /// <summary>An open building with nobody working in it (e.g. after its worker was moved away).</summary>
+        public bool IsUnstaffed(int need) => B(need).exists && B(need).unlocked && B(need).workers == 0;
+
+        /// <summary>Open buildings without a worker.</summary>
+        public int UnstaffedBuildings
+        {
+            get { int n = 0; for (int i = 0; i < S.buildings.Count; i++) if (IsUnstaffed(i)) n++; return n; }
+        }
+
+        // ------------------------------------------------------------------ building performance
+
+        /// <summary>Speed of a building without a worker, relative to the normal speed (SCRUM-88).</summary>
+        public float NoWorkerSpeed => Math.Max(0.05f, Math.Min(1f, Cfg.noWorkerFactor));
+
+        /// <summary>
+        /// Speed of a building with the given number of workers (SCRUM-89): one worker = normal speed 1,
+        /// every further worker adds extraWorkerBonus (2 workers = 1.5, 3 workers = 2 with the default 0.5).
+        /// </summary>
+        public float WorkerSpeed(int workers) =>
+            workers <= 0 ? NoWorkerSpeed : 1f + Math.Max(0f, Cfg.extraWorkerBonus) * (workers - 1);
+
+        /// <summary>
+        /// Service speed multiplier of a building: 1 = normal. A building left without a worker
+        /// keeps working, but only at NoWorkerSpeed; more workers make it faster.
+        /// </summary>
+        public float Speed(int need)
+        {
+            var b = B(need);
+            if (!b.exists || !b.unlocked) return 0f;
+            return WorkerSpeed(b.workers);
+        }
+
+        /// <summary>
+        /// Seconds one guest is served at the building right now: baseServiceTime / Speed (SCRUM-90).
+        /// Infinite for a closed building.
+        /// </summary>
+        public float ServiceTime(int need)
+        {
+            float speed = Speed(need);
+            return speed <= 0 ? float.PositiveInfinity : Math.Max(0.1f, Cfg.Need(need).baseServiceTime) / speed;
+        }
+
+        /// <summary>
+        /// Seconds until the building finishes the guest it serves now, at its current speed (0 = nobody in service).
+        /// A guest keeps the progress made so far when workers move: only the rest goes at the new speed (SCRUM-91).
+        /// </summary>
+        public float ServiceLeft(int need)
+        {
+            float left = 0;
+            foreach (var g in S.guests)
+                if (g.stage == GuestStage.InService && g.CurrentNeed == need)
+                    left = Math.Max(left, (1f - g.progress) * ServiceTime(need));
+            return left;
+        }
+
+        /// <summary>
+        /// Rough wait of a guest joining the queue now: the current service plus everybody ahead of him,
+        /// recomputed from the workers the building has right now.
+        /// </summary>
+        public float EstimatedWait(int need)
+        {
+            if (Speed(need) <= 0) return float.PositiveInfinity;
+            int slots = Math.Max(1, Cfg.serviceSlots);
+            return ServiceLeft(need) + QueueCount(need) * ServiceTime(need) / slots;
+        }
+
+        /// <summary>
+        /// Requests of a building after its workers changed (SCRUM-91): guests in service keep their progress
+        /// and continue at the new speed, waiting guests fill free slots at once, the live satisfaction follows.
+        /// </summary>
+        void UpdateNeedProcessing(int need)
+        {
+            if (!InWave) return;
+            foreach (var g in S.guests)
+                if (g.CurrentNeed == need && g.stage == GuestStage.InService) g.progress = Math.Max(0f, Math.Min(1f, g.progress));
+            FillServiceSlots(need);
+            S.satisfaction = LiveSatisfaction();
+        }
 
         /// <summary>Aggregated numbers of one need in the current wave.</summary>
         public NeedStats Stats(int need) => S.stats[need];
@@ -110,14 +199,160 @@ namespace IslandTycoon
         /// has been waiting too long. The player should send a worker there.
         /// </summary>
         public bool IsBottleneck(int need) =>
-            S.phase == GamePhase.WaveActive && IsNeedActive(need) &&
+            InWave && IsNeedActive(need) &&
             (QueueCount(need) >= Cfg.bottleneckQueue || LongestWaitFraction(need) > Cfg.bottleneckWaitFraction);
 
-        /// <summary>Guests of the wave that have not arrived yet.</summary>
-        public int GuestsToCome => S.plans.Count - S.nextPlan;
+        // ------------------------------------------------------------------ satisfaction
+
+        /// <summary>
+        /// Score of one request served after waiting <paramref name="waited"/> seconds in the queue:
+        /// 1 when served fast, falling to lateScore when the guest almost ran out of patience.
+        /// </summary>
+        public float RequestScore(float waited)
+        {
+            float pat = Math.Max(0.1f, Cfg.patience);
+            float fast = pat * Cfg.fastServeFraction;
+            if (waited <= fast) return 1f;
+            float t = Math.Min(1f, (waited - fast) / Math.Max(0.01f, pat - fast));
+            return 1f + (Cfg.lateScore - 1f) * t;
+        }
+
+        /// <summary>
+        /// Wave Satisfaction 0..100: average score of the requests resolved so far (100 when none yet).
+        /// Served requests count with their score, failed ones (guest lost patience) with 0.
+        /// </summary>
+        public float WaveSatisfaction()
+        {
+            float score = 0; int resolved = 0;
+            foreach (var st in S.stats) { score += st.score; resolved += st.Resolved; }
+            return resolved == 0 ? 100f : 100f * score / resolved;
+        }
+
+        /// <summary>
+        /// Live Wave Satisfaction 0..100 during the wave: served requests plus the guests waiting
+        /// right now, scored by how long they have waited so far. It drops while queues grow.
+        /// </summary>
+        public float LiveSatisfaction()
+        {
+            float score = 0; int count = 0;
+            foreach (var st in S.stats) { score += st.score; count += st.Resolved; }
+            foreach (var g in S.guests)
+            {
+                if (g.stage != GuestStage.Queued && g.stage != GuestStage.InService) continue;
+                score += RequestScore(g.waited);
+                count++;
+            }
+            return count == 0 ? 100f : 100f * score / count;
+        }
+
+        /// <summary>Final rating of the completed wave, 0..3 stars (SCRUM-95). 0 while no wave is complete.</summary>
+        public int WaveStars => WaveComplete ? Cfg.Stars(S.satisfaction) : 0;
+
+        /// <summary>
+        /// Rewards of the completed wave (SCRUM-97): coins for every served request plus a satisfaction bonus
+        /// that grows with the wave number, energy per star, Resort Value per served request and per star.
+        /// Only shown here; they are added to the resort when the player claims them.
+        /// </summary>
+        public WaveReward WaveRewards()
+        {
+            var r = new WaveReward();
+            if (!WaveComplete) return r;
+            int served = 0, coins = 0;
+            for (int n = 0; n < S.stats.Count; n++)
+            {
+                served += S.stats[n].served;
+                coins += S.stats[n].served * Math.Max(0, Cfg.Need(n).coinsPerServe);
+            }
+            float bonus = S.satisfaction * Cfg.satisfactionCoinBonus * (1f + S.waveIndex * Cfg.bonusGrowthPerWave);
+            int stars = WaveStars;
+            r.coins = coins + (int)Math.Round(bonus);
+            r.energy = stars * Math.Max(0, Cfg.energyPerStar);
+            r.resortValue = served * Math.Max(0, Cfg.valuePerServe) + stars * Math.Max(0, Cfg.valuePerStar);
+            return r;
+        }
+
+        /// <summary>The need was requested in the finished wave and its guests were served well (SCRUM-98).</summary>
+        public bool ServiceWorkedWell(int need) => WorkedWell(Stats(need));
+
+        /// <summary>The numbers of one service show it worked well: requested, nobody lost, good average score.</summary>
+        public bool WorkedWell(NeedStats st) => st != null && st.requested > 0 && st.failed == 0 && st.AvgScore >= Cfg.goodServiceScore;
+
+        /// <summary>The need was requested in the finished wave but its guests waited too long or left (SCRUM-99).</summary>
+        public bool ServiceNeedsImprovement(int need) => Stats(need).requested > 0 && !ServiceWorkedWell(need);
+
+        /// <summary>Why a service needs improvement: lost guests first, otherwise slow service.</summary>
+        public string ImprovementReason(int need) => ImprovementReason(Stats(need));
+
+        public static string ImprovementReason(NeedStats st)
+        {
+            if (st != null && st.failed > 0) return st.failed == 1 ? "1 guest lost" : $"{st.failed} guests lost";
+            return "slow service";
+        }
+
+        /// <summary>Results of the last finished wave; null before the first wave ends (SCRUM-100).</summary>
+        public WaveResult LastResult { get; private set; }
+
+        /// <summary>Takes the snapshot of the wave that just reached WAVE_COMPLETE.</summary>
+        WaveResult MakeResult()
+        {
+            var r = new WaveResult
+            {
+                wave = WaveNumber,
+                satisfaction = S.satisfaction,
+                stars = WaveStars,
+                reward = WaveRewards(),
+            };
+            foreach (var st in S.stats)
+                r.stats.Add(new NeedStats { requested = st.requested, served = st.served, failed = st.failed, score = st.score });
+            return r;
+        }
+
+        /// <summary>One word for a rating.</summary>
+        public static string RatingWord(int stars) =>
+            stars >= 3 ? "EXCELLENT!" : stars == 2 ? "GOOD JOB!" : stars == 1 ? "NOT BAD" : "GUESTS WERE UNHAPPY";
+
+        /// <summary>Guests of the wave that have not arrived yet (0 once the arrivals are closed).</summary>
+        public int GuestsToCome => S.arrivalsOpen ? S.plans.Count - S.nextPlan : 0;
+
+        /// <summary>
+        /// Requests of one need still waiting to be resolved in this wave: guests on the way,
+        /// in the queue or in service, their later needs, and guests that have not arrived yet.
+        /// </summary>
+        public int RemainingRequests(int need)
+        {
+            int n = 0;
+            foreach (var g in S.guests)
+            {
+                if (g.stage == GuestStage.Leaving || g.stage == GuestStage.Done) continue;
+                for (int k = g.index; k < g.needs.Count; k++) if (g.needs[k] == need) n++;
+            }
+            if (S.arrivalsOpen)
+                for (int i = S.nextPlan; i < S.plans.Count; i++)
+                    foreach (var x in S.plans[i].needs) if (x == need) n++;
+            return n;
+        }
+
+        /// <summary>All requests of the wave still waiting to be resolved.</summary>
+        public int RemainingRequests()
+        {
+            int n = 0;
+            for (int i = 0; i < Needs.Count; i++) n += RemainingRequests(i);
+            return n;
+        }
+
+        /// <summary>Requests standing in the queues right now (not yet in service).</summary>
+        public int QueuedRequests()
+        {
+            int n = 0;
+            for (int i = 0; i < Needs.Count; i++) n += QueueCount(i);
+            return n;
+        }
+
+        /// <summary>New guests can still arrive in this wave.</summary>
+        public bool ArrivalsOpen => S.arrivalsOpen;
 
         /// <summary>Everybody arrived and every request was served.</summary>
-        public bool AllGuestsDone => S.phase == GamePhase.WaveActive && GuestsToCome == 0 && S.guests.Count == 0;
+        public bool AllGuestsDone => (InWave || WaveComplete) && GuestsToCome == 0 && RemainingRequests() == 0;
 
         public int OpenBuildings
         {
@@ -131,7 +366,21 @@ namespace IslandTycoon
         /// Workers can be moved while the player prepares the resort (AWAITING_WAVE)
         /// and also during an active wave, to react to bottlenecks. Moves are instant and free.
         /// </summary>
-        public bool CanMoveWorkers => S.phase == GamePhase.AwaitingWave || S.phase == GamePhase.WaveActive;
+        public bool CanMoveWorkers => S.phase == GamePhase.AwaitingWave || InWave;
+
+        /// <summary>Coins one worker move costs. 0 by design: moving workers is free.</summary>
+        public int MoveCost => Math.Max(0, Cfg.workerMoveCost);
+
+        /// <summary>The player has the coins for one move.</summary>
+        public bool CanAffordMove => S.coins >= MoveCost;
+
+        /// <summary>Pays for one move (nothing with the default cost of 0).</summary>
+        bool PayMove()
+        {
+            if (!CanAffordMove) return false;
+            S.coins -= MoveCost;
+            return true;
+        }
 
         /// <summary>Puts a free worker into an open building.</summary>
         public bool AssignWorker(int need) => MoveWorker(need, +1);
@@ -151,8 +400,11 @@ namespace IslandTycoon
             if (!b.exists || !b.unlocked) return false;
             if (delta > 0 && FreeWorkers <= 0) return false;
             if (delta < 0 && b.workers <= 0) return false;
+            if (!PayMove()) return false;
             b.workers += delta > 0 ? 1 : -1;
+            UpdateNeedProcessing(need);
             WorkersMoved?.Invoke(need);
+            if (delta > 0) UpdateNewBuilding(need);
             Changed?.Invoke();
             return true;
         }
@@ -168,15 +420,39 @@ namespace IslandTycoon
             int donor = -1, most = 0;
             foreach (var b in S.buildings)
                 if (b.need != need && b.workers > most) { most = b.workers; donor = b.need; }
-            if (donor < 0) return false;
-            B(donor).workers--;
-            WorkersMoved?.Invoke(donor);
-            return MoveWorker(need, +1);
+            return donor >= 0 && TransferWorker(donor, need);
+        }
+
+        /// <summary>
+        /// Moves one worker straight from one building to another, instantly: no walking time,
+        /// the new building has the worker in the same moment. Allowed before and during a wave.
+        /// </summary>
+        public bool TransferWorker(int from, int to)
+        {
+            if (!CanTransfer(from, to) || !PayMove()) return false;
+            B(from).workers--;
+            B(to).workers++;
+            UpdateNeedProcessing(from);
+            UpdateNeedProcessing(to);
+            WorkersMoved?.Invoke(from);
+            WorkersMoved?.Invoke(to);
+            UpdateNewBuilding(to);
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>A worker of building <paramref name="from"/> can go to building <paramref name="to"/> now.</summary>
+        public bool CanTransfer(int from, int to)
+        {
+            if (!CanMoveWorkers || !CanAffordMove || from == to) return false;
+            if (from < 0 || to < 0 || from >= S.buildings.Count || to >= S.buildings.Count) return false;
+            var a = B(from); var b = B(to);
+            return a.exists && b.exists && b.unlocked && a.workers > 0;
         }
 
         /// <summary>Some worker could come to the building now (free or from another building).</summary>
         public bool CanPullWorker(int need) =>
-            CanMoveWorkers && B(need).unlocked && (FreeWorkers > 0 || AssignedWorkers - B(need).workers > 0);
+            CanMoveWorkers && CanAffordMove && B(need).unlocked && (FreeWorkers > 0 || AssignedWorkers - B(need).workers > 0);
 
         // ------------------------------------------------------------------ guest needs
 
@@ -241,7 +517,9 @@ namespace IslandTycoon
             foreach (var p in S.plans) foreach (var n in p.needs) S.stats[n].requested++;
             S.guests.Clear();
             S.nextPlan = 0;
+            S.arrivalsOpen = true;
             S.waveTime = 0;
+            S.satisfaction = 100f;
             S.phase = GamePhase.WaveActive;
             WaveStarted?.Invoke();
             Changed?.Invoke();
@@ -254,12 +532,12 @@ namespace IslandTycoon
         /// </summary>
         public void Tick(float dt)
         {
-            if (S.phase != GamePhase.WaveActive || dt <= 0) return;
+            if (!InWave || dt <= 0) return;
             dt = Math.Min(dt, 0.25f);
             S.waveTime += dt;
 
             // arrivals
-            while (S.nextPlan < S.plans.Count && S.plans[S.nextPlan].time <= S.waveTime)
+            while (S.arrivalsOpen && S.nextPlan < S.plans.Count && S.plans[S.nextPlan].time <= S.waveTime)
             {
                 var p = S.plans[S.nextPlan++];
                 S.guests.Add(new Guest
@@ -268,6 +546,9 @@ namespace IslandTycoon
                     stage = GuestStage.Walking, timer = Cfg.walkTime,
                 });
             }
+            float duration = Cfg.Wave(S.waveIndex).duration;
+            if (S.arrivalsOpen && (S.nextPlan >= S.plans.Count || (duration > 0 && S.waveTime >= duration)))
+                CloseArrivals();
 
             // guests
             foreach (var g in S.guests)
@@ -280,9 +561,11 @@ namespace IslandTycoon
                         break;
                     case GuestStage.Queued:
                         g.waited += dt;
+                        if (g.waited > Cfg.patience) Fail(g);
                         break;
                     case GuestStage.InService:
-                        g.progress += dt / Math.Max(0.1f, Cfg.Need(g.CurrentNeed).baseServiceTime);
+                        // the workers of the building decide how fast the service goes
+                        g.progress += dt / ServiceTime(g.CurrentNeed);
                         if (g.progress >= 1f) Serve(g);
                         break;
                     case GuestStage.Leaving:
@@ -294,30 +577,92 @@ namespace IslandTycoon
             S.guests.RemoveAll(g => g.stage == GuestStage.Done);
 
             // queues -> free service slots, first come first served
-            foreach (var b in S.buildings)
+            foreach (var b in S.buildings) FillServiceSlots(b.need);
+            S.satisfaction = LiveSatisfaction();
+
+            // the wave ends only when no new guests come and every queue is empty
+            if (S.phase == GamePhase.WaveFinishing && RemainingRequests() == 0) EndWave();
+            Changed?.Invoke();
+        }
+
+        /// <summary>Guests waiting in the queue of an open building go into its free service slots (first come, first served).</summary>
+        void FillServiceSlots(int need)
+        {
+            var b = B(need);
+            if (!b.unlocked) return;
+            int free = Math.Max(1, Cfg.serviceSlots) - InServiceCount(need);
+            foreach (var g in S.guests)
             {
-                if (!b.unlocked) continue;
-                int free = Math.Max(1, Cfg.serviceSlots) - InServiceCount(b.need);
-                foreach (var g in S.guests)
-                {
-                    if (free <= 0) break;
-                    if (g.stage != GuestStage.Queued || g.CurrentNeed != b.need) continue;
-                    g.stage = GuestStage.InService;
-                    g.progress = 0;
-                    free--;
-                }
+                if (free <= 0) break;
+                if (g.stage != GuestStage.Queued || g.CurrentNeed != need) continue;
+                g.stage = GuestStage.InService;
+                g.progress = 0;
+                free--;
             }
+        }
+
+        /// <summary>
+        /// The building that just got a worker is updated in the same moment: it counts as staffed,
+        /// and during a wave its waiting guests are taken into service right away, not on the next tick.
+        /// </summary>
+        void UpdateNewBuilding(int need)
+        {
+            if (InWave) FillServiceSlots(need);
+            S.satisfaction = InWave ? LiveSatisfaction() : S.satisfaction;
+            BuildingStaffed?.Invoke(need);
+        }
+
+        /// <summary>WAVE_FINISHING -> WAVE_COMPLETE: the final Wave Satisfaction is fixed.</summary>
+        void EndWave()
+        {
+            S.guests.Clear();   // the last guests walk off the island
+            S.satisfaction = WaveSatisfaction();
+            S.phase = GamePhase.WaveComplete;
+            LastResult = MakeResult();   // the results screen reads this snapshot
+            WaveEnded?.Invoke();
+        }
+
+        /// <summary>
+        /// Stops new requests: no more guests arrive in this wave. Guests that have not arrived yet
+        /// are dropped together with their requests; guests already in the resort are still served.
+        /// </summary>
+        public void CloseArrivals()
+        {
+            if (!S.arrivalsOpen) return;
+            for (int i = S.nextPlan; i < S.plans.Count; i++)
+                foreach (var n in S.plans[i].needs) S.stats[n].requested--;
+            if (S.nextPlan < S.plans.Count) S.plans.RemoveRange(S.nextPlan, S.plans.Count - S.nextPlan);
+            S.arrivalsOpen = false;
+            // the wave goes on until the guests already in the resort are served
+            if (S.phase == GamePhase.WaveActive) S.phase = GamePhase.WaveFinishing;
+            ArrivalsClosed?.Invoke();
             Changed?.Invoke();
         }
 
         void Serve(Guest g)
         {
-            S.stats[g.CurrentNeed].served++;
+            var st = S.stats[g.CurrentNeed];
+            st.served++;
+            st.score += RequestScore(g.waited);
             g.index++;
             g.progress = 0;
             g.waited = 0;
             g.timer = Cfg.walkTime;
             g.stage = g.index < g.needs.Count ? GuestStage.Walking : GuestStage.Leaving;
+        }
+
+        /// <summary>
+        /// The guest waited longer than the patience: the request fails (score 0) and the guest
+        /// gives up the remaining needs as well and leaves the resort.
+        /// </summary>
+        void Fail(Guest g)
+        {
+            S.stats[g.CurrentNeed].failed++;
+            for (int k = g.index + 1; k < g.needs.Count; k++) S.stats[g.needs[k]].failed++;
+            g.index = g.needs.Count;
+            g.progress = 0;
+            g.timer = Cfg.walkTime;
+            g.stage = GuestStage.Leaving;
         }
     }
 }

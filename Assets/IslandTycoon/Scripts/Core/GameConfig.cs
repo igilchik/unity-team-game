@@ -21,6 +21,8 @@ namespace IslandTycoon
         public float baseServiceTime = 4f;
         [Tooltip("How often guests ask for this need compared to the others")]
         public float weight = 1f;
+        [Tooltip("Coins earned for one served request")]
+        public int coinsPerServe = 5;
     }
 
     [Serializable]
@@ -66,6 +68,8 @@ namespace IslandTycoon
         public int guests = 5;
         [Tooltip("Seconds between guest arrivals")]
         public float spacing = 3f;
+        [Tooltip("Arrivals stop after this many seconds (0 = when the last planned guest arrives)")]
+        public float duration;
         [Tooltip("Needs per guest (each guest asks for different needs)")]
         public int minNeeds = 1;
         public int maxNeeds = 1;
@@ -85,6 +89,18 @@ namespace IslandTycoon
         public int startCoins = 60;
         public int startEnergy = 6;
 
+        [Header("Workers")]
+        [Tooltip("Coins paid for moving one worker (0 = moves are free)")]
+        public int workerMoveCost = 0;
+
+        [Header("Building performance")]
+        [Tooltip("Service speed of an open building with no worker (1 = normal speed). Guests are still served, just slowly.")]
+        [Range(0.05f, 1f)]
+        public float noWorkerFactor = 0.35f;
+        [Tooltip("Extra speed of every worker after the first one (0.5 = +50 % per worker)")]
+        [Range(0f, 2f)]
+        public float extraWorkerBonus = 0.5f;
+
         [Header("Guests")]
         [Tooltip("Seconds a guest walks from the boat / between buildings")]
         public float walkTime = 2f;
@@ -92,6 +108,33 @@ namespace IslandTycoon
         public int serviceSlots = 1;
         [Tooltip("Seconds a guest is willing to wait in a queue")]
         public float patience = 12f;
+
+        [Header("Satisfaction")]
+        [Tooltip("Served within this part of the patience = perfect score")]
+        public float fastServeFraction = 0.35f;
+        [Tooltip("Score of a request served right before the patience runs out")]
+        public float lateScore = 0.4f;
+
+        [Header("Wave rating")]
+        [Tooltip("Wave Satisfaction (0..100) needed for 1, 2 and 3 stars")]
+        public int star1 = 40;
+        public int star2 = 70;
+        public int star3 = 90;
+
+        [Header("Wave rewards")]
+        [Tooltip("Bonus coins per satisfaction point at the end of a wave")]
+        public float satisfactionCoinBonus = 0.2f;
+        [Tooltip("The bonus grows with every wave by this part")]
+        public float bonusGrowthPerWave = 0.25f;
+        [Tooltip("Energy earned per star")]
+        public int energyPerStar = 1;
+        [Tooltip("Resort Value per served request and per star")]
+        public int valuePerServe = 2;
+        public int valuePerStar = 10;
+
+        [Tooltip("A service whose average request score reaches this (0..1) worked well in the wave")]
+        [Range(0f, 1f)]
+        public float goodServiceScore = 0.8f;
 
         [Header("Bottleneck")]
         [Tooltip("This many guests waiting at one building = bottleneck")]
@@ -103,15 +146,15 @@ namespace IslandTycoon
         public NeedConfig[] needs =
         {
             new NeedConfig { need = NeedType.Rooms,     buildingName = "Guest Hotel", spriteKey = "rooms",
-                             enabled = true, displayName = "Rooms", icon = "UI/Icons/icon_need_rooms", baseServiceTime = 8.0f },
+                             enabled = true, displayName = "Rooms", icon = "UI/Icons/icon_need_rooms", baseServiceTime = 8.0f, coinsPerServe = 6 },
             new NeedConfig { need = NeedType.Drinks,    buildingName = "Tiki Bar",    spriteKey = "bar",
-                             enabled = true, displayName = "Drinks", icon = "UI/Icons/icon_need_drinks", baseServiceTime = 4.8f },
+                             enabled = true, displayName = "Drinks", icon = "UI/Icons/icon_need_drinks", baseServiceTime = 4.8f, coinsPerServe = 4 },
             new NeedConfig { need = NeedType.Food,      buildingName = "Restaurant",  spriteKey = "food",
-                             enabled = true, displayName = "Food", icon = "UI/Icons/icon_need_food", baseServiceTime = 7.2f },
+                             enabled = true, displayName = "Food", icon = "UI/Icons/icon_need_food", baseServiceTime = 7.2f, coinsPerServe = 5 },
             new NeedConfig { need = NeedType.Relax,     buildingName = "Pool",        spriteKey = "pool",
-                             enabled = true, displayName = "Relax", icon = "UI/Icons/icon_need_relax", baseServiceTime = 8.0f },
+                             enabled = true, displayName = "Relax", icon = "UI/Icons/icon_need_relax", baseServiceTime = 8.0f, coinsPerServe = 7 },
             new NeedConfig { need = NeedType.OceanView, buildingName = "Bungalows",   spriteKey = "bungalows",
-                             enabled = true, displayName = "Ocean View", icon = "UI/Icons/icon_need_oceanview", baseServiceTime = 9.6f },
+                             enabled = true, displayName = "Ocean View", icon = "UI/Icons/icon_need_oceanview", baseServiceTime = 9.6f, coinsPerServe = 10 },
         };
 
         [Header("Island")]
@@ -142,6 +185,15 @@ namespace IslandTycoon
         {
             if (waves == null || waves.Length == 0) return new WaveConfig();
             return waves[Mathf.Clamp(index, 0, waves.Length - 1)];
+        }
+
+        /// <summary>Final rating of a wave: 0..3 stars for its Wave Satisfaction.</summary>
+        public int Stars(float satisfaction)
+        {
+            if (satisfaction >= star3) return 3;
+            if (satisfaction >= star2) return 2;
+            if (satisfaction >= star1) return 1;
+            return 0;
         }
 
         public PlotConfig Plot(int need)
