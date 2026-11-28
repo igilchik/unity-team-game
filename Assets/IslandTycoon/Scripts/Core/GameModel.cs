@@ -29,6 +29,8 @@ namespace IslandTycoon
         public event Action<int> EnergyAdded;
         /// <summary>Resort Value changed (by how much).</summary>
         public event Action<int> ResortValueChanged;
+        /// <summary>The player claimed the rewards of the finished wave.</summary>
+        public event Action<WaveReward> RewardsClaimed;
 
         public GameModel(GameConfig cfg)
         {
@@ -314,6 +316,25 @@ namespace IslandTycoon
             ResortValueChanged?.Invoke(change);
             Changed?.Invoke();
             return change;
+        }
+
+        /// <summary>There is a finished wave whose rewards can be taken.</summary>
+        public bool CanClaimRewards => WaveComplete && LastResult != null;
+
+        /// <summary>
+        /// Claim Rewards (SCRUM-106): adds the rewards of the finished wave (from its result snapshot)
+        /// to the player: Coins, Energy and Resort Value. Refused while no wave is complete.
+        /// </summary>
+        public bool ClaimRewards()
+        {
+            if (!CanClaimRewards) return false;
+            var r = LastResult.reward;
+            AddCoins(r.coins);
+            AddEnergy(r.energy);
+            AddResortValue(r.resortValue);
+            RewardsClaimed?.Invoke(r);
+            Changed?.Invoke();
+            return true;
         }
 
         /// <summary>Total of a reward, for quick checks (empty reward = 0).</summary>

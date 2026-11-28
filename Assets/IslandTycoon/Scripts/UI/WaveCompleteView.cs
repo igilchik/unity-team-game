@@ -13,6 +13,7 @@ namespace IslandTycoon
     /// SCRUM-99: services that need improvement in red, with the reason (lost guests / slow service).
     /// SCRUM-100: connected to the finished wave: opens on GameModel.WaveEnded and shows only the
     /// snapshot of that wave (GameModel.LastResult), so nothing on it changes afterwards.
+    /// SCRUM-106: CLAIM REWARDS adds the shown rewards to the player and closes the screen.
     /// </summary>
     public class WaveCompleteView : MonoBehaviour
     {
@@ -50,6 +51,8 @@ namespace IslandTycoon
         /// <summary>Stars lit on the screen.</summary>
         public int StarsShown { get { int n = 0; foreach (var s in _stars) if (s.color == Color.white) n++; return n; } }
         public Button ContinueButton => _continue;
+        /// <summary>The CLAIM REWARDS button (same button as ContinueButton).</summary>
+        public Button ClaimButton => _continue;
         public bool IsOpen => UIFactory.IsOpen(_modal);
         /// <summary>The wave results the screen shows.</summary>
         public WaveResult Result => _result;
@@ -99,8 +102,8 @@ namespace IslandTycoon
                     new Vector2(90, 0), new Vector2(370, 38));
                 _rowState[n].rectTransform.pivot = new Vector2(0, 0.5f);
             }
-            _continue = UIFactory.Button("Continue", _content, "UI/Kit/btn_primary_orange", "CONTINUE", 44, Bottom, new Vector2(0, 72),
-                new Vector2(310, 0), Close, true);
+            _continue = UIFactory.Button("ClaimRewards", _content, "UI/Kit/btn_primary_orange", "CLAIM REWARDS", 40, Bottom, new Vector2(0, 72),
+                new Vector2(400, 0), Claim, true);
             _m.WaveEnded += OnWaveEnded;
             _m.Changed += Refresh;
             Refresh();
@@ -175,5 +178,12 @@ namespace IslandTycoon
         }
 
         public void Close() => UIFactory.Close(_modal);
+
+        /// <summary>Takes the rewards of the shown wave and closes the screen.</summary>
+        public void Claim()
+        {
+            _m.ClaimRewards();
+            Close();
+        }
     }
 }
