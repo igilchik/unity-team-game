@@ -33,6 +33,7 @@ namespace IslandTycoon
             Section("SCRUM-86 Moving workers costs no currency", () => FreeMoves(cfg));
             Section("SCRUM-92 Building performance with and without a worker", () => WorkerPerformance());
             Section("SCRUM-100 Wave Complete screen shows the finished wave", () => WaveCompleteScreen());
+            Section("SCRUM-108 Resource update and Claim Rewards", () => ResourceUpdate());
 
             _sb.Insert(0, _fails == 0 ? "ALL CHECKS PASSED\n" : $"{_fails} CHECK(S) FAILED\n");
             return _sb.ToString();
@@ -622,6 +623,79 @@ namespace IslandTycoon
                     Check(screen2.RowState(rooms) == "worked well", "calm wave: Hotel worked well");
                 }
                 finally { Dispose(calm); }
+            }
+            finally { Dispose(go); Dispose(cfg); }
+        }
+
+        // ------------------------------------------------------------------ SCRUM-108
+
+        static void ResourceUpdate()
+        {
+            var cfg = UnityEngine.ScriptableObject.CreateInstance<GameConfig>();
+            var go = new GameObject("SelfTest_Resources");
+            try
+            {
+                var m = new GameModel(cfg);
+                int coinsEv = 0, energyEv = 0, valueEv = 0, claimEv = 0;
+                m.CoinsAdded += a => coinsEv++;
+                m.EnergyAdded += a => energyEv++;
+                m.ResortValueChanged += d => valueEv++;
+                m.RewardsClaimed += r => claimEv++;
+
+                // single resources
+                int c0 = m.S.coins;
+                Check(m.AddCoins(15) == 15 && m.S.coins == c0 + 15 && coinsEv == 1, "AddCoins adds coins");
+                Check(m.AddCoins(0) == 0 && m.AddCoins(-7) == 0 && m.S.coins == c0 + 15 && coinsEv == 1, "0 or negative coins change nothing");
+
+                int e0 = m.S.energy;
+                Check(m.AddEnergy(2) == 2 && m.S.energy == e0 + 2 && energyEv == 1, "AddEnergy adds energy");
+                int added = m.AddEnergy(1000);
+                Check(m.S.energy == m.MaxEnergy && added == m.MaxEnergy - (e0 + 2), "energy stops at MaxEnergy");
+                Check(m.AddEnergy(5) == 0 && m.S.energy == m.MaxEnergy, "full energy gets nothing more");
+
+                Check(m.AddResortValue(40) == 40 && m.S.resortValue == 40, "AddResortValue raises the value");
+                Check(m.AddResortValue(-100) == -40 && m.S.resortValue == 0, "Resort Value never drops below 0");
+                Check(valueEv == 2, "Resort Value changes are reported");
+
+                // claim the rewards of a real wave
+                cfg.waves = new[] { new WaveConfig { guests = 3, spacing = 20f, weights = new float[] { 1, 0, 0, 0, 0 } } };
+                var w = new GameModel(cfg);
+                var hud = go.AddComponent<HudView>();
+                hud.Build(w);
+                var screen = go.AddComponent<WaveCompleteView>();
+                screen.Build(w, hud.Root);
+                int claims = 0;
+                w.RewardsClaimed += r => claims++;
+                Check(!w.CanClaimRewards && !w.ClaimRewards(), "nothing to claim before a wave");
+
+                w.StartWave();
+                for (int i = 0; i < 50; i++) w.Tick(0.1f);
+                Check(!w.ClaimRewards(), "nothing to claim during the wave");
+                for (int i = 0; i < 5000 && !w.WaveComplete; i++) w.Tick(0.1f);
+
+                var res = w.LastResult;
+                var calc = RewardCalculator.Calculate(cfg, res.stats, res.satisfaction, 0);
+                Check(calc.coins == res.reward.coins && calc.energy == res.reward.energy && calc.resortValue == res.reward.resortValue,
+                    "RewardCalculator gives the same reward from the wave's numbers");
+                Check(res.reward.coins > 0 && res.reward.energy > 0 && res.reward.resortValue > 0, "a good wave earns coins, energy and resort value");
+
+                int coins = w.S.coins, energy = w.S.energy, value = w.S.resortValue;
+                Check(w.CanClaimRewards && screen.ClaimButton.interactable, "rewards can be claimed on the Wave Complete screen");
+                screen.ClaimButton.onClick.Invoke();
+                Check(w.S.coins == coins + res.reward.coins, "Claim adds the Coins");
+                Check(w.S.energy == Mathf.Min(w.MaxEnergy, energy + res.reward.energy), "Claim adds the Energy");
+                Check(w.S.resortValue == value + res.reward.resortValue, "Claim updates the Resort Value");
+                Check(hud.CoinsText.text == w.S.coins.ToString() && hud.EnergyText.text == w.S.energy.ToString()
+                      && hud.ValueText.text == w.S.resortValue.ToString(), "HUD shows the new resources");
+                Check(!screen.IsOpen && claims == 1, "screen closes after the claim");
+
+                // the same reward only once
+                int c1 = w.S.coins, e1 = w.S.energy, v1 = w.S.resortValue;
+                Check(!w.ClaimRewards() && w.RewardsAlreadyClaimed && !w.CanClaimRewards, "second claim is refused");
+                screen.Claim();
+                Check(w.S.coins == c1 && w.S.energy == e1 && w.S.resortValue == v1 && claims == 1, "a second press adds nothing");
+                Check(!screen.ClaimButton.interactable && screen.ClaimButton.GetComponentInChildren<UnityEngine.UI.Text>().text == "CLAIMED",
+                    "button shows CLAIMED and is disabled");
             }
             finally { Dispose(go); Dispose(cfg); }
         }
