@@ -15,6 +15,7 @@ namespace IslandTycoon
     /// SCRUM-25: the button is shown and active only in AWAITING_WAVE.
     /// SCRUM-78: free workers counter (bottom left) follows every worker move.
     /// SCRUM-52: Wave Satisfaction bar with a smiley under the plaque during the wave.
+    /// SCRUM-103: the Coins pill bumps when coins are added to the player.
     /// </summary>
     public class HudView : MonoBehaviour
     {
@@ -28,6 +29,8 @@ namespace IslandTycoon
         Image _satFace;
         Text _satText;
         const float SatWidth = 430, SatHeight = 72;
+        RectTransform _coinsPill;
+        float _coinsBump = -1f;   // time of the last bump
 
         public Text TitleText => _title;
         public Text StatusText => _status;
@@ -82,13 +85,30 @@ namespace IslandTycoon
             _startWave = UIFactory.Button("StartWave", _root, "UI/Kit/btn_primary_orange", "START WAVE", 46,
                 new Vector2(1, 0), new Vector2(-24, 20), new Vector2(370, 0), () => { if (_m.CanStartWave) onStartWave?.Invoke(); });
 
+            _coinsPill = (RectTransform)_coins.transform.parent.parent;
+            _m.CoinsAdded += OnCoinsAdded;
             _m.Changed += Refresh;
             Refresh();
         }
 
         void OnDestroy()
         {
-            if (_m != null) _m.Changed -= Refresh;
+            if (_m == null) return;
+            _m.Changed -= Refresh;
+            _m.CoinsAdded -= OnCoinsAdded;
+        }
+
+        void OnCoinsAdded(int amount) => _coinsBump = Time.unscaledTime;
+
+        void Update() => Bump(_coinsPill, _coinsBump);
+
+        /// <summary>Short scale bump of a pill after its value went up.</summary>
+        static void Bump(RectTransform pill, float since)
+        {
+            if (pill == null) return;
+            float t = since < 0 ? 1f : Time.unscaledTime - since;
+            float k = t < 0.4f ? 1f + Mathf.Sin(t / 0.4f * Mathf.PI) * 0.12f : 1f;
+            pill.localScale = new Vector3(k, k, 1);
         }
 
         /// <summary>Copies the current game data into the HUD (only texts that really changed are touched).</summary>

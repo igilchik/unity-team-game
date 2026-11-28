@@ -23,6 +23,8 @@ namespace IslandTycoon
         public event Action<int> WorkersMoved;
         /// <summary>A building received a worker (assigned or moved in); its state is already updated.</summary>
         public event Action<int> BuildingStaffed;
+        /// <summary>Coins were added to the player (amount added).</summary>
+        public event Action<int> CoinsAdded;
 
         public GameModel(GameConfig cfg)
         {
@@ -258,6 +260,21 @@ namespace IslandTycoon
         /// </summary>
         public WaveReward WaveRewards() =>
             WaveComplete ? RewardCalculator.Calculate(Cfg, S.stats, S.satisfaction, S.waveIndex) : new WaveReward();
+
+        // ------------------------------------------------------------------ player resources
+
+        /// <summary>
+        /// Adds Coins to the current state of the player (SCRUM-103). Only positive amounts are added;
+        /// returns how many coins were added.
+        /// </summary>
+        public int AddCoins(int amount)
+        {
+            if (amount <= 0) return 0;
+            S.coins = (int)Math.Min((long)S.coins + amount, int.MaxValue);
+            CoinsAdded?.Invoke(amount);
+            Changed?.Invoke();
+            return amount;
+        }
 
         /// <summary>Total of a reward, for quick checks (empty reward = 0).</summary>
         public static int RewardTotal(WaveReward r) => r.coins + r.energy + r.resortValue;
